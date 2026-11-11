@@ -23,6 +23,7 @@ fn main() {
             "set_launch_at_login",
             "start_sso",
             "local_backend_status",
+            "dev_accounts",
             "local_ai_state",
             "local_ai_download",
             "local_ai_cancel_download",

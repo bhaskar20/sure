@@ -161,8 +161,8 @@ body { background: var(--bg); color: var(--text); }
   letter-spacing: 0.05em;
   color: var(--secondary);
 }
-#server-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-#server-list li { display: flex; gap: 8px; align-items: center; }
+#server-list, #dev-account-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#server-list li, #dev-account-list li { display: flex; gap: 8px; align-items: center; }
 .server-open {
   flex: 1;
   text-align: left;
@@ -175,6 +175,8 @@ body { background: var(--bg); color: var(--text); }
   cursor: pointer;
 }
 .server-open:hover { border-color: var(--secondary); }
+#dev-account-list .server-open { width: 100%; text-align: left; }
+#dev-skip { margin-top: 10px; }
 .server-remove { background: transparent; border: none; color: var(--secondary); font-size: 12px; cursor: pointer; }
 
 .hidden { display: none; }
@@ -211,4 +213,4 @@ body { background: var(--bg); color: var(--text); }
 .ai-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary); }
 
 /* Interactive elements never part of the drag region. */
-input, button, select, a, #server-list, #prefs-server-list { -webkit-app-region: no-drag; }
+input, button, select, a, #server-list, #dev-account-list, #prefs-server-list { -webkit-app-region: no-drag; }

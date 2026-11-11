@@ -9,6 +9,9 @@ export const S = {
   remembered: "Remembered servers",
   remove: "Remove",
   localTitle: "Starting Sure",
+  devAccountsTitle: "Sign in as",
+  devAccountsEmpty: "No accounts yet. Create one, or run npm run seed:dev.",
+  devSkip: "Continue without signing in",
   localFailed: "Sure couldn't start",
   localLogs: "Logs are in:",
 } as const;

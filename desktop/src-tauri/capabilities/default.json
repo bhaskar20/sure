@@ -36,6 +36,7 @@
     "allow-local-ai-set-enabled",
     "allow-local-ai-set-context",
     "allow-local-ai-delete",
-    "allow-local-ai-add-custom"
+    "allow-local-ai-add-custom",
+    "allow-dev-accounts"
   ]
 }

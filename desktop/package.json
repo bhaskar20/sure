@@ -9,12 +9,14 @@
     "tauri": "tauri",
     "runtime:mac": "scripts/build-runtime-macos.sh",
     "runtime:app": "scripts/build-runtime-macos.sh --app-only",
-    "dev:local": "SURE_RUNTIME_DIR=\"$PWD/runtime\" tauri dev",
+    "dev:local": "scripts/dev-local.sh human",
     "build:mac": "tauri build --config src-tauri/tauri.local.conf.json",
     "build:app": "tauri build --config src-tauri/tauri.local.conf.json --bundles app",
     "test:rust": "cd src-tauri && cargo test",
     "test:smoke": "cd src-tauri && SURE_RUNTIME_DIR=\"$PWD/../runtime\" cargo test --test packaged_runtime_test -- --nocapture",
-    "seed:dev": "scripts/local-rails.sh --dev desktop:dev_seed"
+    "seed:dev": "scripts/local-rails.sh --dev desktop:dev_seed",
+    "dev:agent": "scripts/dev-local.sh agent",
+    "seed:agent": "scripts/local-rails.sh --agent desktop:dev_seed"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.1.0",

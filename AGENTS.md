@@ -11,6 +11,7 @@
 - Ruby uses two-space indentation, `snake_case` methods/variables and `CamelCase` classes. JavaScript uses `lowerCamelCase` variables/functions and `PascalCase` classes; follow Biome. Keep domain logic out of ERB.
 - Never commit secrets; use environment variables and `.env.local` for local configuration.
 - Do not start `rails server`, touch `tmp/restart.txt`, run `rails credentials`, or automatically run migrations. Setup and database commands in the [development guide](docs/llm-guides/development.md) are for explicitly requested environment work.
+- To run the Sure Desktop app, follow [desktop/CLAUDE.md](desktop/CLAUDE.md): agents use `npm run dev:agent` (its own port and data) and never the human's `npm run dev:local` or port 3000.
 - New migrations use the current Rails migration version; leave historical migration versions intact.
 
 ## Tests and pull requests

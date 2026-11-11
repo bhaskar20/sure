@@ -41,7 +41,8 @@ pub enum Status {
     /// No bundled runtime: this build connects to a remote server instead.
     NotBundled,
     Starting { step: String },
-    Ready { url: String },
+    /// `dev_login`: the window offers dev accounts to sign in as (human dev mode).
+    Ready { url: String, dev_login: bool },
     Failed { message: String, logs: String },
 }
 
@@ -207,17 +208,16 @@ pub fn start(app: &AppHandle) {
         backend.set_status(Status::NotBundled);
         return;
     };
-    // Development builds keep separate data, so a `tauri dev` session never
-    // stops (as stale) the services of an installed Sure that is running.
-    let data_folder = if cfg!(debug_assertions) { "local-dev" } else { "local" };
     let data_root = match app.path().app_local_data_dir() {
-        Ok(d) => d.join(data_folder),
+        Ok(d) => d.join(data_folder()),
         Err(e) => {
             backend.set_status(Status::Failed { message: e.to_string(), logs: String::new() });
             return;
         }
     };
     let data = DataDir::new(data_root);
+    record_dev_data_dir(&data);
+    crate::dev_mode::init_login_token();
     backend.set_status(Status::Starting { step: "Preparing".into() });
     let ai = crate::local_ai::LocalAi::new(Some(runtime.llama_server()), data.root.clone())
         .map_err(|e| eprintln!("[sure] local AI unavailable: {e}"))
@@ -231,7 +231,8 @@ pub fn start(app: &AppHandle) {
                 *LOCAL_URL.lock().unwrap() = Some(url.clone());
                 crate::commands::grant_server_capability(&app, &url);
                 crate::local_ai_app::grant_capability(&app, &url);
-                backend.set_status(Status::Ready { url });
+                let dev_login = crate::dev_mode::login_token().is_some();
+                backend.set_status(Status::Ready { url, dev_login });
                 crate::local_ai_app::start_server(&app);
             }
             Err(message) => {
@@ -241,6 +242,34 @@ pub fn start(app: &AppHandle) {
             }
         }
     });
+}
+
+/// The data folder name. Development builds keep separate data per checkout
+/// (`local-dev-<hash of the build folder>`), so a `tauri dev` session never
+/// stops, as stale, the services of an installed Sure or of another checkout's
+/// dev app. The chosen path is written to `desktop/.dev-data-dir` for the
+/// dev scripts (local-rails.sh --dev).
+fn data_folder() -> String {
+    if !cfg!(debug_assertions) {
+        return "local".into();
+    }
+    use sha2::{Digest, Sha256};
+    let build_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
+        .unwrap_or_default();
+    let hash = Sha256::digest(build_dir.as_bytes());
+    let id = hash[..4].iter().map(|b| format!("{b:02x}")).collect::<String>();
+    format!("local-dev-{id}{}", crate::dev_mode::data_folder_suffix())
+}
+
+/// Record a dev build's data folder in its checkout for the dev scripts.
+fn record_dev_data_dir(data: &DataDir) {
+    if cfg!(debug_assertions) {
+        let name = format!(".dev-data-dir{}", crate::dev_mode::data_folder_suffix());
+        let marker = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(name);
+        let _ = fs::write(marker, data.root.display().to_string());
+    }
 }
 
 /// Stop the local services with the app.
@@ -276,6 +305,28 @@ impl LocalBackend {
         // before we pick ports for this run.
         stop_stale(rt, data);
         let mut secrets = load_or_create_secrets(data)?;
+        // Dev scripts reserve an exact port (human: the default port; agents: their own range).
+        if let Some(port) = crate::dev_mode::forced_web_port() {
+            if secrets.web_port != port || !port_is_free(port) {
+                // After a `tauri dev` rebuild the previous instance may still be
+                // shutting down and holding the port; give it time to let go.
+                let deadline = Instant::now() + Duration::from_secs(20);
+                while !port_is_free(port) {
+                    if Instant::now() > deadline {
+                        return Err(format!("Port {port} is already in use."));
+                    }
+                    std::thread::sleep(Duration::from_millis(250));
+                }
+                secrets.web_port = port;
+                if secrets.db_port == port {
+                    secrets.db_port = free_port()?;
+                }
+                if secrets.valkey_port == port {
+                    secrets.valkey_port = free_port()?;
+                }
+                save_secrets(data, &secrets)?;
+            }
+        }
         *self.shutdown.lock().unwrap() =
             Some(ShutdownPlan { runtime: rt.clone(), data: data.clone(), secrets: secrets.clone() });
 
@@ -326,7 +377,7 @@ impl LocalBackend {
 
         step("Updating database");
         let rails_log = data.logs().join("rails.log");
-        let extra = self.extra_env.lock().unwrap().clone();
+        let extra = self.ruby_extra_env();
         let mut prepare = rails_command(rt, data, &secrets, &extra, &rails_log)?;
         // db:create first (a no-op once the database exists): db:prepare alone
         // detects a missing database by connecting to it and reading Postgres'
@@ -362,7 +413,7 @@ impl LocalBackend {
     }
 
     fn start_web(&self, rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Result<String, String> {
-        let extra = self.extra_env.lock().unwrap().clone();
+        let extra = self.ruby_extra_env();
         let mut web = rails_command(rt, data, secrets, &extra, &data.logs().join("rails.log"))?;
         web.args(["bin/desktop-puma", "-C", "config/puma.rb"]);
         let web = web.spawn().map_err(|e| format!("Could not start Sure: {e}"))?;
@@ -381,6 +432,13 @@ impl LocalBackend {
 
     pub fn extra_env(&self) -> Vec<(String, String)> {
         self.extra_env.lock().unwrap().clone()
+    }
+
+    /// Extra environment plus this launch's dev sign-in token, if any.
+    fn ruby_extra_env(&self) -> Vec<(String, String)> {
+        let mut env = self.extra_env();
+        env.extend(crate::dev_mode::rails_env());
+        env
     }
 
     /// Restart only Puma (with embedded Sidekiq), e.g. to apply new AI
