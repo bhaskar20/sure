@@ -6,7 +6,8 @@
 #   desktop/scripts/local-rails.sh runner 'puts User.count'
 #   desktop/scripts/local-rails.sh console
 #   desktop/scripts/local-rails.sh demo_data:default     # load demo data
-#   desktop/scripts/local-rails.sh --dev desktop:dev_seed  # seed `npm run dev:local`
+#   desktop/scripts/local-rails.sh --dev desktop:dev_seed    # seed `npm run dev:local`
+#   desktop/scripts/local-rails.sh --agent desktop:dev_seed  # seed `npm run dev:agent`
 #
 # SURE_APP (default /Applications/Sure.app) picks the installed app to use.
 # --dev targets this checkout's dev app instead: its data folder and desktop/runtime/.
@@ -15,12 +16,14 @@ set -euo pipefail
 APP="${SURE_APP:-/Applications/Sure.app}"
 RT="$APP/Contents/Resources/runtime"
 DATA="$HOME/Library/Application Support/app.sure.desktop/local"
-if [ "${1:-}" = "--dev" ]; then
+if [ "${1:-}" = "--dev" ] || [ "${1:-}" = "--agent" ]; then
+  suffix=""
+  [ "$1" = "--agent" ] && suffix="-agent"
   shift
   RT="${SURE_RUNTIME_DIR:-$(cd "$(dirname "$0")/.." && pwd)/runtime}"
   # The dev app records its (per-checkout) data folder here on launch.
-  MARKER="$(cd "$(dirname "$0")/.." && pwd)/.dev-data-dir"
-  [ -f "$MARKER" ] || { echo "Start the dev app once (npm run dev:local) so it records its data folder." >&2; exit 1; }
+  MARKER="$(cd "$(dirname "$0")/.." && pwd)/.dev-data-dir$suffix"
+  [ -f "$MARKER" ] || { echo "Start the dev app once (npm run dev:local, or dev:agent for --agent) so it records its data folder." >&2; exit 1; }
   DATA="$(cat "$MARKER")"
   export SURE_DESKTOP_DEV=1
 fi

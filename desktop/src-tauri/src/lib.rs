@@ -2,6 +2,7 @@ pub mod attachments;
 pub mod badge;
 pub mod commands;
 pub mod deep_link;
+pub mod dev_mode;
 pub mod local_ai;
 pub mod local_ai_app;
 pub mod local_backend;
@@ -37,6 +38,7 @@ pub fn run() {
             commands::set_launch_at_login,
             commands::start_sso,
             local_backend::local_backend_status,
+            dev_mode::dev_accounts,
             local_ai_app::local_ai_state,
             local_ai_app::local_ai_download,
             local_ai_app::local_ai_cancel_download,
@@ -52,11 +54,17 @@ pub fn run() {
             // Packaged builds run Sure on this computer; the main window shows
             // progress and opens the local server once it answers.
             local_backend::start(app.handle());
-            // Ctrl+C in `tauri dev`, or a SIGTERM, quits like the menu does, so
-            // the database, Valkey and the model server stop with the app.
+            // Ctrl+C in `tauri dev`, or a SIGTERM, stops the database, Valkey
+            // and the model server like quitting does. Then exit with the usual
+            // "terminated by a signal" status (130), not 0: `tauri dev` reads a
+            // successful exit as the user quitting and ends the whole session
+            // instead of restarting the app after a rebuild.
             {
                 let handle = app.handle().clone();
-                if let Err(e) = ctrlc::set_handler(move || handle.exit(0)) {
+                if let Err(e) = ctrlc::set_handler(move || {
+                    local_backend::stop(&handle);
+                    std::process::exit(130);
+                }) {
                     eprintln!("[sure] could not install the quit signal handler: {e}");
                 }
             }
