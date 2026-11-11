@@ -328,9 +328,14 @@ impl LocalBackend {
         let rails_log = data.logs().join("rails.log");
         let extra = self.extra_env.lock().unwrap().clone();
         let mut prepare = rails_command(rt, data, &secrets, &extra, &rails_log)?;
-        // --trace: on failure the log keeps the whole error chain (e.g. the
-        // PG::ConnectionBad behind Rails' generic connection message).
-        prepare.arg("bin/rails").args(["db:prepare", "--trace"]);
+        // db:create first (a no-op once the database exists): db:prepare alone
+        // detects a missing database by connecting to it and reading Postgres'
+        // "does not exist" error, but on Windows the server resets the socket
+        // right after sending it, the client can lose the message, and setup
+        // fails with "server closed the connection unexpectedly". db:create
+        // connects to the always-present `postgres` database instead.
+        // --trace: on failure the log keeps the whole error chain.
+        prepare.arg("bin/rails").args(["db:create", "db:prepare", "--trace"]);
         let status = prepare.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
         if !status.success() {
             return Err(format!("Database setup failed ({status}). {}", tail(&rails_log)));
