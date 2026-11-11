@@ -25,7 +25,7 @@ en:
       bundle_label: App bundle (.zip)
       install: Install
       dev_url_label: Development server URL
-      dev_url_help: Load an app you are building from a localhost URL. Available on development and self-hosted installs only.
+      dev_url_help: Load an app you are building from a localhost URL. Available in Sure Desktop and development installs only.
       dev_url_placeholder: http://localhost:5173/
       load_dev: Load from dev server
       upgrade_label: Replace the installed app

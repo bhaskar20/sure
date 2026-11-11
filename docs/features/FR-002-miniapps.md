@@ -200,7 +200,9 @@ No overlap with FR-001.
   - **Trust and distribution:** install from a zip the admin uploads; Sure
     records the bundle's SHA-256 and shows it. No marketplace or signing in
     v1. Dev mode loads from a `localhost` URL, only in development or
-    self-hosted (including Desktop) installs.
+    Sure Desktop (2026-11-11: narrowed from all self-hosted installs, because a
+    dev-server app runs outside the frame CSP and its `network` list cannot be
+    enforced).
   - **MCP Apps alignment:** JSON-RPC 2.0 over `postMessage` with `ui/initialize`,
     `tools/list` and `tools/call` as MCP Apps defines them, plus Sure-namespaced
     `sure/storage/*` methods and `notifications/sure/*` events. Tool names and
@@ -366,7 +368,5 @@ adds `sandbox allow-scripts allow-forms allow-popups`.
 Left to do:
 - Exercise the real `postMessage` round trip in a browser (SDK ↔ host ↔ bridge) with
   `examples/miniapps/recategorizer`, in the web app and in Sure Desktop; add a system test.
-- Decide whether dev mode stays available on every self-hosted install (it cannot enforce the
-  manifest's `network` list) or only in development and Desktop.
 - Deferred PRs on this branch: granular scopes for API keys/OAuth, an app-wide CSP.
 - Then the pre-PR checklist and a PR.

@@ -60,8 +60,11 @@ class MiniApp < ApplicationRecord
 
     # Loading an app from a local URL is a development tool; hosted installs
     # never contact a developer's machine.
+    # A dev-server app loads from the viewer's localhost, outside Sure's frame
+    # CSP, so its manifest `network` list cannot be enforced. Only offer it
+    # where the developer is the one using Sure: development and Sure Desktop.
     def dev_mode_available?
-      Rails.env.development? || Rails.env.test? || Rails.application.config.app_mode.self_hosted?
+      Rails.env.development? || Rails.env.test? || ENV["SURE_DESKTOP"] == "1"
     end
 
     private
