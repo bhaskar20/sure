@@ -2,10 +2,10 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | In progress |
 | Priority | P1 |
-| Owner | — |
-| Branch | — |
+| Owner | claude-fr-002 (coordinated agent workflow) |
+| Branch | `feature/FR-002-miniapps` |
 | PR | — |
 | Depends on | — |
 
@@ -154,54 +154,196 @@ family's data from inside the app.
 
 ## Touches
 
-Expected areas; refine before building.
+- Migration `db/migrate/20261111120000_create_mini_apps.rb` and `db/schema.rb`.
+- Models: `app/models/mini_app.rb`, `app/models/mini_app/{manifest,permission,package,dev_server,asset,record,activity,bridge}.rb`;
+  `has_many :mini_apps` on `Family`.
+- Controllers: `app/controllers/mini_apps_controller.rb`, `app/controllers/mini_app_frames_controller.rb`.
+- Views: `app/views/mini_apps/`; one preview-gated nav entry in `app/helpers/application_helper.rb` / the
+  layout nav list.
+- JavaScript: `app/javascript/controllers/mini_app_host_controller.js`.
+- Routes: a `mini_apps` resource and the `mini_app_frames` route in `config/routes.rb`.
+- Locales: `config/locales/views/mini_apps/en.yml`, `config/locales/models/mini_app/en.yml`.
+- Tests and fixtures under `test/models/mini_app*`, `test/controllers/mini_app*`, `test/fixtures/mini_app*`.
+- SDK and docs: `packages/miniapp-sdk/`, `examples/miniapps/`, `bin/miniapp-pack`, `docs/miniapps/`.
 
-- New models: `MiniApp`, `MiniApp::Installation` (per family, granted
-  permissions), `MiniApp::Record` (mini app data), activity/audit records.
-- New controllers and views for the mini apps settings page, the install and
-  consent flow, and the page or panel that hosts the iframe.
-- `app/javascript/controllers/`: the bridge Stimulus controller.
-- `config/initializers/content_security_policy.rb`: enable a policy.
-- `config/initializers/doorkeeper.rb`, `app/models/api_key.rb`: granular
-  scopes.
-- `app/controllers/api/v1/` and `app/models/assistant/function/`: share the
-  service layer with the bridge.
-- `app/controllers/mcp_controller.rb`: optionally serve mini app UIs as MCP
-  Apps resources.
-- New `docs/miniapps/` developer guide and a separate SDK package.
+No overlap with FR-001.
 
 ## Decisions
 
 - 2026-11-11: Build as one feature. Granular scopes, the shared service layer
   and enabling CSP are part of FR-002, not separate features; they can still
   land as separate PRs on the feature branch.
+- 2026-11-11 (product owner: "maximum flexibility, complete control"), resolving the open questions:
+  - **Flexibility: the whole tool catalog.** The bridge exposes the same
+    `Assistant::Function` tools that the assistant and the MCP server use, as
+    MCP-style `tools/call`. That is the shared service layer: one
+    implementation, three callers (assistant, MCP, mini apps). A mini app can
+    do anything the assistant can, within the permissions it is granted.
+  - **Control: granular, editable, revocable grants.** Each manifest permission
+    (`transactions:write`, …) is shown at install; the admin can grant any
+    subset, change it later, disable the app (instant kill switch) or
+    uninstall it (deletes its files, storage and activity). Grants are checked
+    on every call, server side.
+  - **Control: a per-app write policy.** `confirm` (default) makes Sure ask the
+    person in a host-rendered dialog before every write; `allow` lets writes
+    through. The dialog is drawn by Sure, outside the iframe, so a mini app
+    cannot fake or click it.
+  - **Control: everything is on the record.** Every tool call, allowed,
+    denied, declined or failed, is logged in the app's activity view with the
+    user, tool and permission.
+  - **Guests** get read permissions only, whatever is granted.
+  - **Extension slots:** v1 ships the full-page slot (an "Apps" entry in the
+    nav and a page per app). Manifests may only declare `page`; panel and
+    widget slots come later on the same bridge.
+  - **Who installs:** family admins install, grant, disable and remove. Every
+    non-guest member can open enabled apps.
+  - **Trust and distribution:** install from a zip the admin uploads; Sure
+    records the bundle's SHA-256 and shows it. No marketplace or signing in
+    v1. Dev mode loads from a `localhost` URL, only in development or
+    self-hosted (including Desktop) installs.
+  - **MCP Apps alignment:** JSON-RPC 2.0 over `postMessage` with `ui/initialize`,
+    `tools/list` and `tools/call` as MCP Apps defines them, plus Sure-namespaced
+    `sure/storage/*` methods and `notifications/sure/*` events. Tool names and
+    schemas are the MCP server's, so a mini app's calls work against
+    `/mcp` too.
+  - **Logic without UI** (jobs, webhooks, QuickJS) is deferred.
+  - **Granular scopes for API keys/OAuth and an app-wide CSP** are deferred
+    to a follow-up PR on this branch: mini app frames get their own strict
+    CSP now; turning on an app-wide policy needs its own testing of every
+    existing inline script and third-party embed.
+
+## Build contract (v1)
+
+Agents build to this contract in parallel. Change it here first if it must change.
+
+### Data (`db/migrate/20261111120000_create_mini_apps.rb`, uuid ids)
+
+- `mini_apps`: `family_id` (fk, not null), `installed_by_id` (fk users, null, nullify),
+  `app_key` (manifest id), `name`, `version`, `description`, `manifest` (jsonb), `icon`,
+  `source` (`bundle` | `dev_server`), `dev_url`, `bundle_sha256`, `status`
+  (`enabled` | `disabled`, default `enabled`), `granted_permissions` (string array, default `{}`),
+  `write_policy` (`confirm` | `allow`, default `confirm`), `last_opened_at`, timestamps.
+  Unique `[family_id, app_key]`.
+- `mini_app_assets`: `mini_app_id` (fk cascade), `path`, `content_type`, `content` (binary),
+  `byte_size`, timestamps. Unique `[mini_app_id, path]`.
+- `mini_app_records`: `mini_app_id` (fk cascade), `collection`, `key`, `data` (jsonb), timestamps.
+  Unique `[mini_app_id, collection, key]`.
+- `mini_app_activities`: `mini_app_id` (fk cascade), `user_id` (fk null, nullify), `rpc_method`,
+  `tool`, `permission`, `outcome` (`ok` | `denied` | `declined` | `error`), `write` (bool),
+  `summary` (jsonb), `error_message`, `created_at`. Index `[mini_app_id, created_at]`.
+
+### Models
+
+- `MiniApp` — `belongs_to :family`, `has_many :assets, :records, :activities` (dependent delete).
+  `enabled?`, `enable!`, `disable!`, `requested_permissions`, `granted?(permission)`,
+  `update_grants!(permissions:, write_policy:)` (keeps only requested ∩ catalog),
+  `effective_permissions_for(user)` (granted, minus writes for guests),
+  `confirm_writes?`, `entry_path`, `network_origins`, `dev_server?`,
+  `frame_token` / `MiniApp.find_by_frame_token(token)` (signed id, purpose `mini_app_frame`,
+  12-hour expiry), `MiniApp.dev_mode_available?`.
+  `MiniApp.install_bundle!(family:, user:, io:)` and
+  `MiniApp.install_dev_server!(family:, user:, url:)` create or upgrade by `app_key`; an upgrade
+  replaces the assets and manifest, keeps storage, and drops grants no longer requested.
+- `MiniApp::Manifest.parse(json_or_hash)` → manifest or raises `MiniApp::Manifest::Invalid`
+  (`#errors`). Fields: `id` (`/\A[a-z0-9][a-z0-9.\-]{2,63}\z/`), `name` (≤ 60), `version`, `description`
+  (≤ 500), `entry` (default `index.html`), `icon` (default `blocks`), `permissions`, `slots`
+  (only `page`; default `["page"]`), `network` (https origins), `author`, `homepage`.
+- `MiniApp::Permission` — the catalog. `all`, `valid?`, `for_tool(name)`, `write?`,
+  `tools(permission)`, `label`/`description` from `mini_app.permissions.*` i18n:
+
+  | Permission | Tools |
+  | --- | --- |
+  | `accounts:read` | `get_accounts`, `get_holdings`, `get_valuations` |
+  | `transactions:read` | `get_transactions`, `get_recurring_transactions`, `get_uncategorized_transactions`, `get_transfer_match_candidates` |
+  | `transactions:write` | `create_transaction`, `update_transaction`, `delete_transaction`, `match_transfer`, `unmatch_transfer`, `update_transfer`, `review_transfer` |
+  | `categories:read` / `categories:write` | `get_categories` / `create_category`, `update_category`, `delete_category` |
+  | `tags:read` / `tags:write` | `get_tags` / `create_tag`, `update_tag` |
+  | `merchants:read` | `get_merchants` |
+  | `rules:read` / `rules:write` | `get_rules`, `get_rule_options`, `preview_rule` / `create_rule`, `update_rule`, `apply_rule` |
+  | `reports:read` | `get_balance_sheet`, `get_income_statement`, `get_budget`, `get_insights` |
+  | `budgets:write` | `update_budget` |
+  | `goals:write` | `create_goal` |
+  | `valuations:write` | `record_valuation`, `set_opening_balance` |
+
+  A tool is callable only if it is in this table **and** in `Assistant.function_classes(user)`.
+- `MiniApp::Package.new(io).read!` → `{ manifest:, assets: [{ path:, content_type:, content: }], sha256: }`.
+  `miniapp.json` at the root (one wrapping folder is stripped). Limits: 10 MB zip, 20 MB unpacked,
+  300 files; rejects absolute paths, `..`, symlinks and a missing entry file. Raises `MiniApp::Package::Invalid`.
+- `MiniApp::Record` — per-app storage. `collection` `/\A[a-z0-9_\-]{1,64}\z/`, `key` 1–255 chars,
+  `data` ≤ 256 KB, at most 5,000 records per app.
+- `MiniApp::Activity` — `MiniApp::Activity.log!(...)`, `recent`.
+
+### Bridge (`MiniApp::Bridge.new(mini_app:, user:).handle(message, confirmed: false, declined: false)`)
+
+Returns a JSON-RPC 2.0 response hash. Methods:
+
+- `ui/initialize` → `{ protocolVersion: "2026-11-11", bridgeVersion: 1, hostInfo: { name: "Sure" },
+  app: { id, name, version }, permissions: [...effective], writePolicy, user: { name, role },
+  family: { currency, locale, dateFormat }, capabilities: { tools: {}, storage: {}, events: {} } }`
+- `tools/list` → `{ tools: [{ name, description, inputSchema, permission, write }] }` (callable ones only)
+- `tools/call` `{ name, arguments }` → `{ content: [{ type: "text", text: json }], structuredContent: result }`,
+  or `isError: true` with a generic message when the tool raises.
+- `sure/storage/get|set|delete|list` (`{ collection, key, data }`; list takes `prefix`, `limit` ≤ 200,
+  `cursor` and returns `{ items: [{ key, data, updatedAt }], nextCursor }`).
+- `ping` → `{}`.
+
+Errors: `-32601` unknown method or tool not available to mini apps, `-32602` invalid params,
+`-32003` permission denied (`data.permission`), `-32004` app disabled, `-32005` confirmation
+required (`data: { tool, permission, summary }`, `summary` localized), `-32006` declined by user,
+`-32029` rate limited (120 tool calls per minute per app and user). Every `tools/call` logs an
+activity with its outcome.
+
+### Host page and transport
+
+- `GET /mini_apps/:id` renders `<div data-controller="mini-app-host"
+  data-mini-app-host-bridge-url-value="/mini_apps/:id/bridge">` with an
+  `<iframe sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer"
+  data-mini-app-host-target="frame">` (never `allow-same-origin`) and a `<dialog
+  data-mini-app-host-target="confirmDialog">` holding `data-mini-app-host-target="confirmMessage"`
+  and buttons wired to `mini-app-host#approve` / `mini-app-host#decline`.
+- The iframe sends JSON-RPC requests with `postMessage`. The host accepts only messages whose
+  `event.source` is the frame's window, POSTs `{ message, confirmed, declined }` as JSON to the
+  bridge URL with the CSRF token, and posts the response back with target origin `*` (the frame
+  has an opaque origin). On `-32005` it shows the dialog and resends with `confirmed: true` or
+  `declined: true`. After a successful write it posts `notifications/sure/data_changed`
+  `{ tool }` to the frame. A frame notification `ui/size-changed` `{ height }` resizes the iframe.
+- `POST /mini_apps/:id/bridge` (session auth, CSRF) → `MiniApp::Bridge`.
+- `GET /mini_app_frames/:token/*path` serves bundle files without session auth (the opaque-origin
+  frame sends no cookies), only for enabled apps, with
+  `Content-Security-Policy: default-src 'none'; script-src <frame base> 'unsafe-inline'; style-src
+  <frame base> 'unsafe-inline'; img-src <frame base> data: blob:; font-src <frame base> data:;
+  connect-src <manifest network or 'none'>; form-action 'none'; base-uri 'none';
+  frame-ancestors 'self'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `Access-Control-Allow-Origin: *` (the token in the path is the capability; module scripts from
+  an opaque origin need CORS).
+- Routes: `resources :mini_apps, only: %i[index show new create update destroy]` with member
+  `get :consent`, `post :bridge`, `get :activity`; `get "mini_app_frames/:token/*path"`.
+  All `mini_apps` actions are preview-gated; install/update/consent/destroy need an admin.
+
+### SDK
+
+`packages/miniapp-sdk/sure-miniapp.js` is a dependency-free classic script exposing
+`window.SureMiniApp` (also importable as ESM through `index.mjs`), with `index.d.ts` and
+`miniapp.schema.json`. `await SureMiniApp.connect()` returns a client with `app`, `permissions`,
+`can(p)`, `call(name, args)`, `tools.list()`, typed helpers (`transactions`, `categories`, `tags`,
+`merchants`, `accounts`, `rules`, `reports`), `storage.get|set|delete|list`, `on("dataChanged")`,
+and automatic `ui/size-changed`. Errors are `SureMiniAppError` with `code` and `data`.
 
 ## Open questions
 
-- **Which extension slots in the first version?** A sidebar page is the
-  simplest; panels on account/transaction detail and dashboard widgets need
-  more design work.
-- **Who may install?** Family admins only, or any member? Self-hosted
-  instance admins may also want to allow-list mini apps for every family.
-- **Trust and distribution.** Install from any zip/URL, or only signed bundles
-  from a list Sure maintains? A hosted Sure needs a stricter answer than a
-  self-hosted or desktop install.
-- **How far to align with MCP Apps?** Use its message format and SDK directly,
-  or a Sure-specific bridge modeled on it?
-- **Mini app logic without UI** (scheduled jobs, reacting to new
-  transactions while no one has it open): needed in the first version, or
-  later via webhooks or a QuickJS sandbox?
-- **Granular scopes for existing API keys:** migrate `read`/`read_write` keys
-  to the new scopes automatically, or keep both?
+- Granular scopes for existing API keys: migrate `read`/`read_write` keys
+  automatically, or keep both? (Needed for the deferred API-key PR.)
+- Should hosted (managed) Sure allow zip installs from any source, or only an
+  allow-list? v1 allows any zip an admin uploads, behind preview gating.
 
 ## Blockers
 
-Waiting on answers to the open questions about extension slots, trust and
-distribution, and how far to align with MCP Apps, before moving to `Ready`.
+None.
 
 ## Progress
 
 - 2026-11-11: Request recorded with research and a recommended design.
+- 2026-11-11: Open questions resolved by the product owner's brief; build contract written; claimed.
 
 ## Handoff
 
