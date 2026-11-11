@@ -36,14 +36,25 @@ encryption keys, so back it up with the data), `pgdata/`, `valkey/`, `storage/`
 (uploads) and `logs/`. On the first launch you create your account on the
 local Sure, exactly like a fresh self-hosted install.
 
-### Build a local-mode DMG (macOS)
-```bash
-cd desktop
-npm ci
-scripts/build-runtime-macos.sh          # ~15 min first time; downloads are cached in build/
-npx tauri build --config src-tauri/tauri.local.conf.json
-# Output: src-tauri/target/release/bundle/dmg/Sure_<ver>_<arch>.dmg
-```
+### Developing on a Mac
+
+Mac builds are made locally; CI only builds Windows (and Mac DMGs on request).
+Everything below runs from `desktop/` after `npm ci`.
+
+| Command | What it does | Time |
+|---|---|---|
+| `npm run runtime:mac` | Build the whole bundled runtime into `runtime/` (Ruby, Rails app, PostgreSQL, Valkey, llama-server, libvips). Downloads are cached in `build/`. | ~15 min first time |
+| `npm run runtime:app` | Re-stage only the Rails app into `runtime/` after changing Rails code | ~1 min |
+| `npm run dev:local` | Run the app in dev mode against `runtime/` in place: frontend hot reload, Rust rebuilt on change | ~10 s to a running Sure |
+| `npm run build:app` | Build `Sure.app` (copies `runtime/` into the bundle) | ~2 min |
+| `npm run build:mac` | Build `Sure.app` and the `.dmg` | ~3 min |
+| `npm run test:rust` / `test:smoke` | Rust tests / boot `runtime/` end to end | seconds / ~30 s |
+
+Dev mode keeps its data in `…/app.sure.desktop/local-dev/`, separate from an
+installed Sure's `local/`, so both can run at once. Ctrl+C (or SIGTERM) quits
+like ⌘Q: the database, Valkey and the model server stop too. Quit a running
+`Sure.app` before rebuilding it, since the build replaces its files in place.
+
 Build on the target architecture (Apple Silicon or Intel). Set
 `APPLE_SIGNING_IDENTITY` to sign the bundled executables for notarization.
 
@@ -58,8 +69,9 @@ cd desktop; npm ci; npx tauri build --config src-tauri/tauri.local.conf.json
 # Output: src-tauri/target/release/bundle/nsis/Sure_<ver>_x64-setup.exe
 ```
 
-CI does both in `.github/workflows/desktop-local-build.yml` (manual run, or push
-a `desktop-v*` tag).
+CI builds the Windows installer in `.github/workflows/desktop-local-build.yml`
+on every manual run or `desktop-v*` tag; tick "Also build the macOS DMGs" on a
+manual run to build those in CI too.
 
 ### Local AI
 

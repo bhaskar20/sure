@@ -25,6 +25,7 @@ open = "5"
 sha2 = "0.10"
 base64 = "0.22"
 getrandom = "0.2"
+ctrlc = { version = "3", features = ["termination"] }
 
 # Already in the tree through wry; used directly to save attachment responses.
 [target.'cfg(target_os = "macos")'.dependencies]

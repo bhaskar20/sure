@@ -79,6 +79,14 @@ pub struct Runtime {
 
 impl Runtime {
     pub fn locate(app: &AppHandle) -> Option<Runtime> {
+        // Development builds (`tauri dev`) can use a runtime folder in place,
+        // instead of Tauri copying ~700 MB of resources on every build.
+        // Release builds always use their own bundled runtime.
+        #[cfg(debug_assertions)]
+        if let Some(dir) = std::env::var_os("SURE_RUNTIME_DIR") {
+            let rt = Runtime { root: PathBuf::from(dir) };
+            return rt.ruby().is_file().then_some(rt);
+        }
         let root = app.path().resource_dir().ok()?.join("runtime");
         let rt = Runtime { root };
         rt.ruby().is_file().then_some(rt)
@@ -199,8 +207,11 @@ pub fn start(app: &AppHandle) {
         backend.set_status(Status::NotBundled);
         return;
     };
+    // Development builds keep separate data, so a `tauri dev` session never
+    // stops (as stale) the services of an installed Sure that is running.
+    let data_folder = if cfg!(debug_assertions) { "local-dev" } else { "local" };
     let data_root = match app.path().app_local_data_dir() {
-        Ok(d) => d.join("local"),
+        Ok(d) => d.join(data_folder),
         Err(e) => {
             backend.set_status(Status::Failed { message: e.to_string(), logs: String::new() });
             return;

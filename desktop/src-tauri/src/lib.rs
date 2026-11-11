@@ -52,6 +52,14 @@ pub fn run() {
             // Packaged builds run Sure on this computer; the main window shows
             // progress and opens the local server once it answers.
             local_backend::start(app.handle());
+            // Ctrl+C in `tauri dev`, or a SIGTERM, quits like the menu does, so
+            // the database, Valkey and the model server stop with the app.
+            {
+                let handle = app.handle().clone();
+                if let Err(e) = ctrlc::set_handler(move || handle.exit(0)) {
+                    eprintln!("[sure] could not install the quit signal handler: {e}");
+                }
+            }
             let menu = menu::build(app.handle())?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()));
