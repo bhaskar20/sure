@@ -74,6 +74,18 @@ fn authenticity_token(html: &str) -> String {
     html[start..end].replace("&#x2F;", "/").replace("&amp;", "&")
 }
 
+/// Prints every service log if the test fails after it is created, so CI shows
+/// the cause of an HTTP error, not just the status code.
+struct DumpLogsOnFailure<'a>(&'a DataDir);
+
+impl Drop for DumpLogsOnFailure<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            dump_logs(self.0);
+        }
+    }
+}
+
 /// Print every service log (and Valkey's generated config) after a failed boot.
 fn dump_logs(data: &DataDir) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(data.logs())
@@ -116,6 +128,7 @@ fn packaged_runtime_boots_signs_up_restarts_and_signs_in() {
     let root = std::env::temp_dir().join(format!("sure-smoke-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
     let data = DataDir::new(root.clone());
+    let _dump_on_failure = DumpLogsOnFailure(&data);
     let email = format!("smoke-{}@example.com", std::process::id());
     let password = format!("Smoke-{}-Aa1!", std::process::id());
 
@@ -123,7 +136,6 @@ fn packaged_runtime_boots_signs_up_restarts_and_signs_in() {
     let backend = LocalBackend::default();
     let url = backend.boot(&rt, &data).unwrap_or_else(|e| {
         backend.stop();
-        dump_logs(&data);
         panic!("first boot failed: {e}");
     });
     assert!(backend.all_running());
