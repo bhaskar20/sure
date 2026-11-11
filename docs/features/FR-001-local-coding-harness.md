@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Dropped |
 | Priority | P1 |
 | Owner | — |
 | Branch | — |
@@ -96,7 +96,9 @@ Expected areas; refine before building.
 
 ## Decisions
 
-None yet.
+- **Dropped (2026-11-11).** The maintainer decided Sure does not need this
+  feature. It will not be built; a prototype was discarded and nothing from
+  it was merged.
 
 ## Open questions
 
@@ -125,13 +127,13 @@ None yet.
 
 ## Blockers
 
-Waiting on answers to the open questions about the harness and the editable
-source before moving to `Ready`.
+None: the feature is dropped.
 
 ## Progress
 
 - 2026-11-11: Request recorded.
+- 2026-11-11: Dropped by the maintainer; the prototype branch was deleted.
 
 ## Handoff
 
-Not started.
+None: dropped.
