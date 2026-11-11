@@ -32,4 +32,24 @@ ldd "$OUT/valkey-server.exe" | awk '$3 ~ /^\/usr\/bin\// { print $3 }' | sort -u
   cp "$dll" "$OUT/"
 done
 ls -la "$OUT"
+
+# Smoke test: the server must start and answer PING.
+set +e
 "$OUT/valkey-server.exe" --version
+echo "valkey --version exit status: $?"
+"$OUT/valkey-server.exe" --port 6390 --bind 127.0.0.1 --save "" --appendonly no &
+pid=$!
+reply=""
+for _ in $(seq 1 20); do
+  sleep 0.5
+  if exec 3<>/dev/tcp/127.0.0.1/6390 2>/dev/null; then
+    printf 'PING\r\n' >&3
+    read -t 3 -r reply <&3
+    exec 3>&-
+    break
+  fi
+done
+kill "$pid" 2>/dev/null
+set -e
+echo "PING reply: $reply"
+[[ "$reply" == +PONG* ]]
