@@ -7,6 +7,8 @@
 #     app/       the Rails app with vendored gems and precompiled assets
 #     postgres/  PostgreSQL server (zonky embedded binaries: relocatable, universal)
 #     valkey/    valkey-server built from source (Redis-compatible, BSD licensed)
+#     llama/     llama.cpp's llama-server (Metal) for local AI models; models
+#                themselves are downloaded later, from Preferences
 #     libvips/   libvips for image variants (avatars, logos, attachment previews):
 #                sharp's prebuilt, self-contained build, as libvips.42.dylib
 #     ssl/       CA bundle for outbound HTTPS from the bundled OpenSSL
@@ -33,6 +35,9 @@ LIBYAML_VERSION="${LIBYAML_VERSION:-0.2.5}"
 POSTGRES_VERSION="${POSTGRES_VERSION:-17.11.0}"   # zonky artifact version
 VALKEY_VERSION="${VALKEY_VERSION:-8.1.4}"
 LIBVIPS_PACKAGE_VERSION="${LIBVIPS_PACKAGE_VERSION:-1.3.4}"  # @img/sharp-libvips-darwin-*
+LLAMA_BUILD="${LLAMA_BUILD:-b11972}"                             # ggml-org/llama.cpp release
+LLAMA_SHA256_arm64="0b39e2cd18407c7f7582c7a9aa7a3328875aefbdef0d13d5f6c3f20dd11401ad"
+LLAMA_SHA256_x86_64="2b17ea5239d5de82c6490795355e830ff9405343d869bf19f16785e6ad07dc8d"
 
 WORK="$DESKTOP/build/runtime-macos-$ARCH"
 OUT="$DESKTOP/runtime"
@@ -111,6 +116,23 @@ tar -xzf "$WORK/src/valkey.tar.gz" -C "$WORK/src/valkey" --strip-components 1
 (cd "$WORK/src/valkey" && make -j"$JOBS" BUILD_TLS=no valkey-server)
 mkdir -p "$OUT/valkey"
 cp "$WORK/src/valkey/src/valkey-server" "$OUT/valkey/"
+
+# --- llama.cpp server ---------------------------------------------------------
+echo "==> llama-server ($LLAMA_BUILD)"
+case "$ARCH" in arm64) LLAMA_ASSET=macos-arm64 ;; x86_64) LLAMA_ASSET=macos-x64 ;; esac
+fetch "https://github.com/ggml-org/llama.cpp/releases/download/$LLAMA_BUILD/llama-$LLAMA_BUILD-bin-$LLAMA_ASSET.tar.gz" "$WORK/src/llama-$LLAMA_BUILD.tar.gz"
+# Checksums are pinned for the default build; a different LLAMA_BUILD is unchecked.
+if [ "$LLAMA_BUILD" = b11972 ]; then
+  expected_sha="$(eval echo "\$LLAMA_SHA256_$ARCH")"
+  echo "$expected_sha  $WORK/src/llama-$LLAMA_BUILD.tar.gz" | shasum -a 256 -c -
+fi
+rm -rf "$WORK/src/llama" && mkdir -p "$WORK/src/llama" "$OUT/llama"
+tar -xzf "$WORK/src/llama-$LLAMA_BUILD.tar.gz" -C "$WORK/src/llama"
+LLAMA_DIR="$(find "$WORK/src/llama" -name llama-server -type f -exec dirname {} \; | head -1)"
+# Only the server and the libraries it loads (all via @loader_path), not the CLI tools.
+cp "$LLAMA_DIR/llama-server" "$LLAMA_DIR"/*.dylib "$OUT/llama/"
+cp "$LLAMA_DIR/LICENSE" "$OUT/llama/LICENSE" 2>/dev/null || true
+"$OUT/llama/llama-server" --version 2>&1 | head -1
 
 # --- libvips -----------------------------------------------------------------
 echo "==> libvips (sharp-libvips $LIBVIPS_PACKAGE_VERSION)"

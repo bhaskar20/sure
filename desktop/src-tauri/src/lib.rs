@@ -2,6 +2,8 @@ pub mod attachments;
 pub mod badge;
 pub mod commands;
 pub mod deep_link;
+pub mod local_ai;
+pub mod local_ai_app;
 pub mod local_backend;
 pub mod menu;
 pub mod notifications;
@@ -23,6 +25,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .manage(AppState::default())
         .manage(local_backend::LocalBackend::default())
+        .manage(local_ai_app::AiHandle::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::add_server,
@@ -34,6 +37,15 @@ pub fn run() {
             commands::set_launch_at_login,
             commands::start_sso,
             local_backend::local_backend_status,
+            local_ai_app::local_ai_state,
+            local_ai_app::local_ai_download,
+            local_ai_app::local_ai_cancel_download,
+            local_ai_app::local_ai_dismiss_error,
+            local_ai_app::local_ai_select,
+            local_ai_app::local_ai_set_enabled,
+            local_ai_app::local_ai_set_context,
+            local_ai_app::local_ai_delete,
+            local_ai_app::local_ai_add_custom,
         ])
         .setup(|app| {
             window::setup(app)?;

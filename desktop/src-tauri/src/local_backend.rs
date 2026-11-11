@@ -95,6 +95,10 @@ impl Runtime {
     pub fn app(&self) -> PathBuf {
         self.root.join("app")
     }
+    /// llama.cpp's OpenAI-compatible server, for local AI models.
+    pub fn llama_server(&self) -> PathBuf {
+        self.root.join("llama").join(exe("llama-server"))
+    }
     /// libvips for Active Storage image variants (avatars, logos, previews).
     pub fn libvips(&self) -> PathBuf {
         self.root.join("libvips")
@@ -157,6 +161,8 @@ pub struct LocalBackend {
     /// PostgreSQL runs under pg_ctl (not as a child we hold): pg_ctl drops
     /// administrator rights on Windows, where postgres refuses to run elevated.
     postgres_started: Mutex<bool>,
+    /// Extra variables for Sure's Ruby processes (local AI settings).
+    extra_env: Mutex<Vec<(String, String)>>,
 }
 
 /// Everything needed to stop the services cleanly, captured at start.
@@ -202,6 +208,10 @@ pub fn start(app: &AppHandle) {
     };
     let data = DataDir::new(data_root);
     backend.set_status(Status::Starting { step: "Preparing".into() });
+    let ai = crate::local_ai::LocalAi::new(Some(runtime.llama_server()), data.root.clone())
+        .map_err(|e| eprintln!("[sure] local AI unavailable: {e}"))
+        .ok();
+    crate::local_ai_app::init(app, ai);
     let app = app.clone();
     std::thread::spawn(move || {
         let backend = app.state::<LocalBackend>();
@@ -210,6 +220,7 @@ pub fn start(app: &AppHandle) {
                 *LOCAL_URL.lock().unwrap() = Some(url.clone());
                 crate::commands::grant_server_capability(&app, &url);
                 backend.set_status(Status::Ready { url });
+                crate::local_ai_app::start_server(&app);
             }
             Err(message) => {
                 eprintln!("[sure] local backend failed: {message}");
@@ -222,6 +233,7 @@ pub fn start(app: &AppHandle) {
 
 /// Stop the local services with the app.
 pub fn stop(app: &AppHandle) {
+    crate::local_ai_app::stop(app);
     app.state::<LocalBackend>().stop();
 }
 
@@ -290,7 +302,8 @@ impl LocalBackend {
 
         step("Updating database");
         let rails_log = data.logs().join("rails.log");
-        let mut prepare = rails_command(rt, data, &secrets, &rails_log)?;
+        let extra = self.extra_env.lock().unwrap().clone();
+        let mut prepare = rails_command(rt, data, &secrets, &extra, &rails_log)?;
         prepare.arg("bin/rails").arg("db:prepare");
         let status = prepare.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
         if !status.success() {
@@ -301,7 +314,7 @@ impl LocalBackend {
         // encryptable columns: encrypt them once, then run with encryption only.
         if secrets.support_unencrypted_data {
             step("Encrypting existing data");
-            let mut encrypt = rails_command(rt, data, &secrets, &rails_log)?;
+            let mut encrypt = rails_command(rt, data, &secrets, &extra, &rails_log)?;
             encrypt.arg("bin/rails").arg("desktop:encrypt_existing_data");
             let status = encrypt.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
             if !status.success() {
@@ -311,8 +324,15 @@ impl LocalBackend {
             save_secrets(data, &secrets)?;
         }
 
+        *self.shutdown.lock().unwrap() =
+            Some(ShutdownPlan { runtime: rt.clone(), data: data.clone(), secrets: secrets.clone() });
         step("Starting Sure");
-        let mut web = rails_command(rt, data, &secrets, &rails_log)?;
+        self.start_web(rt, data, &secrets)
+    }
+
+    fn start_web(&self, rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Result<String, String> {
+        let extra = self.extra_env.lock().unwrap().clone();
+        let mut web = rails_command(rt, data, secrets, &extra, &data.logs().join("rails.log"))?;
         web.args(["bin/desktop-puma", "-C", "config/puma.rb"]);
         let web = web.spawn().map_err(|e| format!("Could not start Sure: {e}"))?;
         self.remember("rails", web);
@@ -320,6 +340,34 @@ impl LocalBackend {
         let url = format!("http://127.0.0.1:{}", secrets.web_port);
         self.wait_for_http(&format!("{url}/up"), Duration::from_secs(180))?;
         Ok(url)
+    }
+
+    /// Extra environment for Sure's Ruby processes; applies to the next
+    /// start (see [`LocalBackend::restart_web`]).
+    pub fn set_extra_env(&self, env: Vec<(String, String)>) {
+        *self.extra_env.lock().unwrap() = env;
+    }
+
+    pub fn extra_env(&self) -> Vec<(String, String)> {
+        self.extra_env.lock().unwrap().clone()
+    }
+
+    /// Restart only Puma (with embedded Sidekiq), e.g. to apply new AI
+    /// settings. The database and Valkey keep running.
+    pub fn restart_web(&self) -> Result<String, String> {
+        let plan = self.shutdown.lock().unwrap().clone().ok_or("Sure is not running.")?;
+        let old = {
+            let mut children = self.children.lock().unwrap();
+            children.iter().position(|(n, _)| *n == "rails").map(|i| children.remove(i).1)
+        };
+        if let Some(mut child) = old {
+            terminate(&mut child);
+            if !wait_exit(&mut child, Duration::from_secs(20)) {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        self.start_web(&plan.runtime, &plan.data, &plan.secrets)
     }
 
     /// Stop all local services: web first, then the job queue, then the database.
@@ -389,7 +437,9 @@ impl LocalBackend {
         let mut children = self.children.lock().unwrap();
         if let Some((_, child)) = children.iter_mut().find(|(n, _)| *n == name) {
             if let Ok(Some(status)) = child.try_wait() {
-                return Err(format!("{name} exited during startup ({status})."));
+                let log = self.shutdown.lock().unwrap().as_ref().map(|p| p.data.logs().join(format!("{name}.log")));
+                let detail = log.map(|l| tail(&l)).unwrap_or_default();
+                return Err(format!("{name} exited during startup ({status}). {detail}"));
             }
         }
         Ok(())
@@ -555,10 +605,16 @@ pub fn rails_env(rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Vec<(String
     env.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
 
-fn rails_command(rt: &Runtime, data: &DataDir, secrets: &Secrets, log: &Path) -> Result<Command, String> {
+fn rails_command(
+    rt: &Runtime,
+    data: &DataDir,
+    secrets: &Secrets,
+    extra: &[(String, String)],
+    log: &Path,
+) -> Result<Command, String> {
     let mut cmd = Command::new(rt.ruby());
     cmd.current_dir(rt.app());
-    for (k, v) in rails_env(rt, data, secrets) {
+    for (k, v) in rails_env(rt, data, secrets).into_iter().chain(extra.iter().cloned()) {
         cmd.env(k, v);
     }
     // Never inherit a Ruby/Bundler setup from the user's shell.

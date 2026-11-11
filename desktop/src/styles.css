@@ -155,6 +155,8 @@ body { background: var(--bg); color: var(--text); }
 /* Preferences window — same palette. */
 .prefs {
   min-height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   box-sizing: border-box;
   padding: calc(var(--titlebar-h) + 8px) 24px 24px;
   background: var(--bg);
@@ -178,5 +180,43 @@ body { background: var(--bg); color: var(--text); }
 .prefs .row { display: flex; align-items: center; justify-content: space-between; }
 .prefs .row label { font-size: 13px; }
 
+/* Local AI */
+.prefs h3 { margin: 16px 0 8px; font-size: 12px; font-weight: 600; }
+.ai-note { margin: 0 0 10px; font-size: 12px; line-height: 1.45; color: var(--secondary); }
+.ai-toggle, .ai-context { margin: 8px 0; }
+#ai-models { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ai-model {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--container);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  align-items: center;
+}
+.ai-model[data-active="true"] { border-color: var(--secondary); }
+.ai-model__name { font-size: 13px; font-weight: 600; }
+.ai-model__badge { margin-left: 6px; font-size: 10px; font-weight: 500; color: var(--secondary); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; }
+.ai-model__meta { grid-column: 1; font-size: 11px; color: var(--secondary); word-break: break-all; }
+.ai-model__actions { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 6px; align-items: center; }
+.ai-model__progress { grid-column: 1 / span 2; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.ai-model__progress > div { height: 100%; background: var(--btn-bg); }
+.btn-small {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-small:hover { border-color: var(--secondary); }
+.btn-small[disabled] { opacity: 0.5; cursor: default; }
+.btn-small--primary { background: var(--btn-bg); color: var(--btn-fg); border-color: var(--btn-bg); }
+.ai-custom { display: flex; flex-direction: column; gap: 8px; }
+.ai-custom .btn-primary { align-self: flex-start; width: auto; padding: 8px 16px; }
+.ai-context select { font: inherit; font-size: 12px; }
+
 /* Interactive elements never part of the drag region. */
-input, button, select, a, #server-list, #prefs-server-list { -webkit-app-region: no-drag; }
+input, button, select, a, #server-list, #prefs-server-list, #ai-models { -webkit-app-region: no-drag; }

@@ -6,6 +6,7 @@
 #     postgres\  PostgreSQL server (zonky embedded binaries)
 #     valkey\    valkey-server.exe + msys-2.0.dll (built by build-valkey-msys2.sh)
 #     libvips\   libvips DLLs for image variants (sharp's prebuilt Windows build)
+#     llama\     llama.cpp's llama-server (Vulkan, CPU fallback) for local AI models
 #     ssl\       CA bundle for outbound HTTPS
 #
 # Requirements: Windows x64, Git for Windows (bash + tar), 7-Zip on PATH, and
@@ -20,6 +21,8 @@ $RubyVersion = (Get-Content (Join-Path $Repo ".ruby-version")).Trim()
 $RubyInstallerRelease = if ($env:RUBYINSTALLER_RELEASE) { $env:RUBYINSTALLER_RELEASE } else { "$RubyVersion-1" }
 $PostgresVersion = if ($env:POSTGRES_VERSION) { $env:POSTGRES_VERSION } else { "17.11.0" }
 $SharpVersion = if ($env:SHARP_WIN32_VERSION) { $env:SHARP_WIN32_VERSION } else { "0.35.5" }  # @img/sharp-win32-x64
+$LlamaBuild = if ($env:LLAMA_BUILD) { $env:LLAMA_BUILD } else { "b11972" }  # ggml-org/llama.cpp release
+$LlamaSha256 = "5f3fa9b3ec948e6cb1af3c8f1063fa39c79f58bb5dc9bb9dfb2db890d098508d"   # win-vulkan-x64, b11972
 
 $Work = Join-Path $Desktop "build\runtime-windows"
 $Out = Join-Path $Desktop "runtime"
@@ -93,6 +96,25 @@ foreach ($i in 1..20) {
 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 Write-Host "Valkey PING reply: $reply"
 if (-not $reply.StartsWith("+PONG")) { throw "bundled valkey-server.exe does not start" }
+
+# --- llama.cpp server ---------------------------------------------------------
+Write-Host "==> llama-server ($LlamaBuild)"
+$llamaZip = Join-Path $Work "src\llama-$LlamaBuild-win-vulkan-x64.zip"
+Fetch "https://github.com/ggml-org/llama.cpp/releases/download/$LlamaBuild/llama-$LlamaBuild-bin-win-vulkan-x64.zip" $llamaZip
+if ($LlamaBuild -eq "b11972" -and (Get-FileHash $llamaZip -Algorithm SHA256).Hash.ToLower() -ne $LlamaSha256) {
+  throw "llama.cpp download does not match its checksum"
+}
+$llamaTmp = Join-Path $Work "llama-extract"
+if (Test-Path $llamaTmp) { Remove-Item -Recurse -Force $llamaTmp }
+7z x $llamaZip "-o$llamaTmp" -y | Out-Null
+$llamaDir = (Get-ChildItem $llamaTmp -Recurse -Filter "llama-server.exe" | Select-Object -First 1).DirectoryName
+New-Item -ItemType Directory -Force -Path (Join-Path $Out "llama") | Out-Null
+# Only the server and the DLLs it loads, not the CLI tools.
+Copy-Item (Join-Path $llamaDir "llama-server.exe") (Join-Path $Out "llama")
+Copy-Item (Join-Path $llamaDir "*.dll") (Join-Path $Out "llama")
+if (Test-Path (Join-Path $llamaDir "LICENSE")) { Copy-Item (Join-Path $llamaDir "LICENSE") (Join-Path $Out "llama") }
+& (Join-Path $Out "llama\llama-server.exe") --version
+if ($LASTEXITCODE -ne 0) { throw "bundled llama-server.exe does not start" }
 
 # --- libvips -----------------------------------------------------------------
 Write-Host "==> libvips (sharp-win32-x64 $SharpVersion)"
