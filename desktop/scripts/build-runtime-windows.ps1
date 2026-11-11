@@ -97,6 +97,35 @@ Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 Write-Host "Valkey PING reply: $reply"
 if (-not $reply.StartsWith("+PONG")) { throw "bundled valkey-server.exe does not start" }
 
+# Start it again the way the app does: with a config file using Windows paths.
+# Valkey's own output goes to the console so a failure explains itself.
+$vkTest = Join-Path $Work "valkey-config-test"
+if (Test-Path $vkTest) { Remove-Item -Recurse -Force $vkTest }
+New-Item -ItemType Directory -Force -Path $vkTest | Out-Null
+$fwd = ($vkTest -replace '\\', '/')
+@"
+bind 127.0.0.1
+protected-mode yes
+port 6391
+requirepass smoketest
+dir "$fwd"
+pidfile "$fwd/valkey.pid"
+appendonly yes
+appendfsync everysec
+save ""
+maxmemory-policy noeviction
+daemonize no
+"@ | Set-Content -Encoding ascii (Join-Path $vkTest "valkey.conf")
+Get-Content (Join-Path $vkTest "valkey.conf")
+$proc = Start-Process -FilePath $valkeyExe -ArgumentList "`"$(Join-Path $vkTest 'valkey.conf')`"" -PassThru -NoNewWindow `
+  -RedirectStandardOutput (Join-Path $vkTest "out.log") -RedirectStandardError (Join-Path $vkTest "err.log")
+Start-Sleep -Seconds 3
+$alive = -not $proc.HasExited
+Write-Host "valkey with config file running: $alive (exit: $($proc.ExitCode))"
+Get-Content (Join-Path $vkTest "out.log"), (Join-Path $vkTest "err.log") -ErrorAction SilentlyContinue
+Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+if (-not $alive) { throw "valkey-server.exe exits when started with a config file" }
+
 # --- llama.cpp server ---------------------------------------------------------
 Write-Host "==> llama-server ($LlamaBuild)"
 $llamaZip = Join-Path $Work "src\llama-$LlamaBuild-win-vulkan-x64.zip"
