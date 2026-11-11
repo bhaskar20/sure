@@ -1,0 +1,10 @@
+_fixture:
+  model_class: MiniApp::Record
+
+recategorizer_settings:
+  mini_app: recategorizer
+  collection: settings
+  key: preferences
+  data:
+    default_category: groceries
+    batch_size: 25

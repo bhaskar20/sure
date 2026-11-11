@@ -1,0 +1,30 @@
+<%# locals: (dev_mode_available:) %>
+<%= render DS::Card.new(class: "gap-4", id: "mini-app-install") do %>
+  <div>
+    <h2 class="font-medium text-primary"><%= t("mini_apps.install_form.title") %></h2>
+    <p class="text-sm text-secondary mt-1"><%= t("mini_apps.install_form.description") %></p>
+  </div>
+
+  <%= styled_form_with url: mini_apps_path, multipart: true, class: "space-y-3", data: { turbo: false } do |form| %>
+    <%= form.file_field :bundle, label: t("mini_apps.install_form.bundle_label"), accept: ".zip,application/zip", required: true %>
+    <%= render "mini_apps/upgrade_checkbox", id: "mini_app_upgrade_bundle" %>
+    <div class="flex justify-end">
+      <%= render DS::Button.new(text: t("mini_apps.install_form.install"), variant: "primary", type: "submit", icon: "upload") %>
+    </div>
+  <% end %>
+
+  <% if dev_mode_available %>
+    <%= render "shared/ruler" %>
+    <%= styled_form_with url: mini_apps_path, class: "space-y-3" do |form| %>
+      <%= form.url_field :dev_url,
+            label: t("mini_apps.install_form.dev_url_label"),
+            help_text: t("mini_apps.install_form.dev_url_help"),
+            placeholder: t("mini_apps.install_form.dev_url_placeholder"),
+            required: true %>
+      <%= render "mini_apps/upgrade_checkbox", id: "mini_app_upgrade_dev" %>
+      <div class="flex justify-end">
+        <%= render DS::Button.new(text: t("mini_apps.install_form.load_dev"), variant: "outline", type: "submit", icon: "terminal") %>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>

@@ -344,7 +344,29 @@ None.
 
 - 2026-11-11: Request recorded with research and a recommended design.
 - 2026-11-11: Open questions resolved by the product owner's brief; build contract written; claimed.
+- 2026-11-11: v1 built by a coordinated agent workflow (data layer, host JS, SDK/docs, bridge,
+  controllers/views, integration, independent security review, fixes). 142 mini app tests pass;
+  rubocop, erb_lint, Biome and Brakeman are clean. The full suite's 11 remaining failures are
+  environment-only and were failing before this branch (libvips variants, `ANTHROPIC_BASE_URL`
+  set in the shell, a date-dependent mobile release tag).
+- 2026-11-11: Review fixes: frame responses carry a CSP `sandbox` directive, so a frame URL
+  opened at top level still gets an opaque origin; reinstalling an existing app id needs an
+  explicit "replace" and resets the write policy to `confirm`; the confirmation dialog lists the
+  resolved arguments of the write (`-32005` `data.details`); Approve is inert for 800 ms with
+  focus on decline; dev-server apps warn that Sure cannot limit their network access.
 
 ## Handoff
 
-Not started.
+Built on `feature/FR-002-miniapps`; not pushed and no PR yet.
+
+Contract deviations: installs only upgrade an existing app id when the admin ticks "Replace the
+installed app" (and never across bundle/dev-server); `-32005` gains `data.details`; the frame CSP
+adds `sandbox allow-scripts allow-forms allow-popups`.
+
+Left to do:
+- Exercise the real `postMessage` round trip in a browser (SDK ↔ host ↔ bridge) with
+  `examples/miniapps/recategorizer`, in the web app and in Sure Desktop; add a system test.
+- Decide whether dev mode stays available on every self-hosted install (it cannot enforce the
+  manifest's `network` list) or only in development and Desktop.
+- Deferred PRs on this branch: granular scopes for API keys/OAuth, an app-wide CSP.
+- Then the pre-PR checklist and a PR.

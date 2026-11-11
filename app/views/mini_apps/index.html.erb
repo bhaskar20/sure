@@ -1,0 +1,31 @@
+<%= content_for :page_title, t(".title") %>
+
+<div class="space-y-6 pb-6 lg:pb-12">
+  <header>
+    <div class="flex items-center gap-2">
+      <h1 class="text-2xl font-semibold text-primary"><%= t(".title") %></h1>
+      <%= render DS::Pill.new(label: t("shared.preview"), size: :md) %>
+    </div>
+    <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
+  </header>
+
+  <% if @mini_apps.any? %>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <% @mini_apps.each do |mini_app| %>
+        <%= render "mini_apps/card", mini_app: mini_app %>
+      <% end %>
+    </div>
+  <% else %>
+    <%= render DS::Card.new do %>
+      <%= render DS::EmptyState.new(
+            icon: "blocks",
+            title: t(".empty_title"),
+            description: Current.user.admin? ? t(".empty_description") : t(".empty_description_member")
+          ) %>
+    <% end %>
+  <% end %>
+
+  <% if Current.user.admin? %>
+    <%= render "mini_apps/install_form", dev_mode_available: @dev_mode_available %>
+  <% end %>
+</div>

@@ -1,0 +1,44 @@
+recategorizer:
+  family: dylan_family
+  installed_by: family_admin
+  app_key: recategorizer
+  name: Recategorizer
+  version: 1.0.0
+  description: Recategorize uncategorized transactions in bulk.
+  icon: shuffle
+  source: bundle
+  bundle_sha256: 0f343b0931126a20f133d67c2b018a3b5e1d6e3c9a3e1a7c0b8e5b4f1d2c3a4b
+  status: enabled
+  write_policy: confirm
+  granted_permissions: ["transactions:read", "transactions:write", "categories:read", "categories:write"]
+  manifest:
+    id: recategorizer
+    name: Recategorizer
+    version: 1.0.0
+    description: Recategorize uncategorized transactions in bulk.
+    entry: index.html
+    icon: shuffle
+    permissions: ["transactions:read", "transactions:write", "categories:read", "categories:write", "tags:read"]
+    slots: ["page"]
+    network: []
+
+budget_peek:
+  family: dylan_family
+  installed_by: family_admin
+  app_key: budget-peek
+  name: Budget Peek
+  version: 0.2.0
+  icon: blocks
+  source: bundle
+  status: disabled
+  write_policy: confirm
+  granted_permissions: ["reports:read"]
+  manifest:
+    id: budget-peek
+    name: Budget Peek
+    version: 0.2.0
+    entry: index.html
+    icon: blocks
+    permissions: ["reports:read"]
+    slots: ["page"]
+    network: []

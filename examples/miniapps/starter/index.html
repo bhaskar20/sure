@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Starter</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <h1 id="title">Starter</h1>
+      <p id="status" class="muted">Connecting to Sure…</p>
+
+      <section>
+        <h2>Permissions</h2>
+        <ul id="permissions"></ul>
+      </section>
+
+      <section>
+        <h2>Accounts</h2>
+        <p class="muted">Needs <code>accounts:read</code>.</p>
+        <button type="button" id="load-accounts" disabled>Load accounts</button>
+        <ul id="accounts"></ul>
+      </section>
+
+      <section>
+        <h2>Note</h2>
+        <p class="muted">Saved in this app's own storage. Nothing leaves Sure.</p>
+        <form id="note-form">
+          <textarea id="note" rows="3" disabled></textarea>
+          <button type="submit" id="save-note" disabled>Save</button>
+          <span id="note-status" class="muted"></span>
+        </form>
+      </section>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

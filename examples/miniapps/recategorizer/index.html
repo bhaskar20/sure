@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recategorizer</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Recategorizer</h1>
+        <p id="status" class="muted" role="status">Connecting to Sure…</p>
+        <p id="missing" class="notice" hidden></p>
+      </header>
+
+      <section class="toolbar">
+        <label class="check">
+          <input type="checkbox" id="only-uncategorized">
+          Only uncategorized
+        </label>
+        <label>
+          Show
+          <select id="page-size">
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+        </label>
+        <button type="button" id="refresh" class="secondary">Refresh</button>
+      </section>
+
+      <section>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col"><span class="visually-hidden">Select</span></th>
+              <th scope="col">Date</th>
+              <th scope="col">Name</th>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="transactions"></tbody>
+        </table>
+        <p id="empty" class="muted" hidden>No transactions match.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Move the selected transaction</h2>
+        <form id="recategorize-form">
+          <select id="category" aria-label="Category"></select>
+          <button type="submit" id="recategorize" disabled>Recategorize</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>New category</h2>
+        <form id="create-form">
+          <input type="text" id="new-category" placeholder="Category name" maxlength="80" required>
+          <button type="submit" id="create" class="secondary">Create</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

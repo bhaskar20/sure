@@ -1,0 +1,113 @@
+---
+en:
+  activerecord:
+    models:
+      mini_app: Mini app
+      mini_app/asset: Mini app file
+      mini_app/record: Mini app record
+      mini_app/activity: Mini app activity
+    attributes:
+      mini_app:
+        app_key: App ID
+        name: Name
+        version: Version
+        granted_permissions: Granted permissions
+        write_policy: Write policy
+      mini_app/record:
+        collection: Collection
+        key: Key
+        data: Data
+    errors:
+      models:
+        mini_app:
+          attributes:
+            granted_permissions:
+              not_requested: can only include permissions the app requests
+        mini_app/record:
+          attributes:
+            data:
+              too_large: is larger than %{size}
+            base:
+              quota_exceeded: This app has reached its limit of %{count} stored records.
+  mini_app:
+    manifest:
+      errors:
+        not_an_object: The manifest must be a JSON object.
+        malformed_json: The manifest is not valid JSON.
+        invalid_id: "\"id\" must be 3–64 characters of lowercase letters, digits, dots and hyphens, starting with a letter or digit."
+        blank: "\"%{field}\" is required."
+        not_a_string: "\"%{field}\" must be a string."
+        too_long: "\"%{field}\" must be at most %{count} characters."
+        invalid_version: "\"version\" must be a version string such as 1.0.0."
+        invalid_entry: "\"entry\" must be a relative path to a file inside the bundle."
+        invalid_icon: "\"icon\" must be an icon name made of lowercase letters, digits and hyphens."
+        not_a_list: "\"%{field}\" must be a list of strings."
+        unknown_permissions: "Unknown permissions: %{permissions}."
+        unsupported_slots: "Unsupported slots: %{slots}. Only \"page\" is available."
+        too_many_origins: "\"network\" can list at most %{count} origins."
+        invalid_origin: "\"%{origin}\" is not an https origin such as https://api.example.com."
+        invalid_homepage: "\"homepage\" must be an http or https URL."
+    package:
+      errors:
+        empty: The uploaded file is empty.
+        not_a_zip: The uploaded file is not a valid zip archive.
+        too_large: The zip file is larger than %{size}.
+        unpacked_too_large: The app's files add up to more than %{size}.
+        too_many_files: The app has more than %{count} files.
+        unsafe_path: "The archive contains an unsafe path: %{path}"
+        missing_manifest: The archive has no miniapp.json at its root.
+        missing_entry: "The entry file %{entry} is not in the archive."
+    install:
+      errors:
+        already_installed: "%{name} is already installed with the app ID \"%{id}\". To replace it with this upload, tick \"Replace the installed app\" and install again."
+        source_changed: "%{name} was installed from a different source. Uninstall it before installing it from a zip file or a dev server."
+    dev_server:
+      errors:
+        unavailable: Dev mode is only available on self-hosted and development installs.
+        not_loopback: Dev mode URLs must point to localhost, 127.0.0.1 or [::1].
+        unreachable: "Could not reach %{url}. Is the dev server running?"
+        bad_response: The dev server answered with status %{status}.
+        manifest_too_large: The dev server's miniapp.json is too large.
+    permissions:
+      accounts_read:
+        label: Read accounts
+        description: See your accounts, balances, holdings and valuations.
+      transactions_read:
+        label: Read transactions
+        description: See transactions, recurring transactions and possible transfer matches.
+      transactions_write:
+        label: Change transactions
+        description: Create, edit and delete transactions, and match or unmatch transfers.
+      categories_read:
+        label: Read categories
+        description: See your categories.
+      categories_write:
+        label: Change categories
+        description: Create, edit and delete categories.
+      tags_read:
+        label: Read tags
+        description: See your tags.
+      tags_write:
+        label: Change tags
+        description: Create and edit tags.
+      merchants_read:
+        label: Read merchants
+        description: See your merchants.
+      rules_read:
+        label: Read rules
+        description: See your rules and preview what they would change.
+      rules_write:
+        label: Change rules
+        description: Create and edit rules, and apply them to your transactions.
+      reports_read:
+        label: Read reports
+        description: See your balance sheet, income statement, budget and insights.
+      budgets_write:
+        label: Change budgets
+        description: Edit budget amounts.
+      goals_write:
+        label: Create goals
+        description: Create savings goals.
+      valuations_write:
+        label: Record valuations
+        description: Record account valuations and set opening balances.

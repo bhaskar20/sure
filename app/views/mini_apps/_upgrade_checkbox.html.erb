@@ -1,0 +1,8 @@
+<%# locals: (id:) %>
+<label class="flex items-start gap-3 cursor-pointer" for="<%= id %>">
+  <%= check_box_tag :upgrade, "1", false, id: id, class: "checkbox checkbox--light mt-1" %>
+  <span class="flex-1">
+    <span class="block text-sm font-medium text-primary"><%= t("mini_apps.install_form.upgrade_label") %></span>
+    <span class="block text-xs text-secondary mt-1"><%= t("mini_apps.install_form.upgrade_help") %></span>
+  </span>
+</label>
