@@ -62,9 +62,11 @@ Everything below runs from `desktop/` after `npm ci`.
 `scripts/local-rails.sh --dev …` runs any other Rails command (`console`,
 `runner`, rake tasks) against the dev data.
 
-Dev mode keeps its data in `…/app.sure.desktop/local-dev/`, separate from an
-installed Sure's `local/`, so both can run at once. Ctrl+C (or SIGTERM) quits
-like ⌘Q: the database, Valkey and the model server stop too. Quit a running
+Dev mode keeps its data in `…/app.sure.desktop/local-dev-<id>/`, one folder per
+checkout (worktrees included), separate from an installed Sure's `local/`, so
+they can all run at once without stopping each other's services. The path is
+written to `desktop/.dev-data-dir`. Ctrl+C (or SIGTERM) quits like ⌘Q: the
+database, Valkey and the model server stop too.
 `Sure.app` before rebuilding it, since the build replaces its files in place.
 
 Build on the target architecture (Apple Silicon or Intel). Set
