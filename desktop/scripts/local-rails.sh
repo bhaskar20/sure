@@ -6,14 +6,22 @@
 #   desktop/scripts/local-rails.sh runner 'puts User.count'
 #   desktop/scripts/local-rails.sh console
 #   desktop/scripts/local-rails.sh demo_data:default     # load demo data
+#   desktop/scripts/local-rails.sh --dev desktop:dev_seed  # seed `npm run dev:local`
 #
 # SURE_APP (default /Applications/Sure.app) picks the installed app to use.
+# --dev targets the dev app instead: its data (local-dev/) and desktop/runtime/.
 set -euo pipefail
 
 APP="${SURE_APP:-/Applications/Sure.app}"
 RT="$APP/Contents/Resources/runtime"
 DATA="$HOME/Library/Application Support/app.sure.desktop/local"
-[ -x "$RT/ruby/bin/ruby" ] || { echo "No bundled runtime in $APP (set SURE_APP)" >&2; exit 1; }
+if [ "${1:-}" = "--dev" ]; then
+  shift
+  RT="${SURE_RUNTIME_DIR:-$(cd "$(dirname "$0")/.." && pwd)/runtime}"
+  DATA="$HOME/Library/Application Support/app.sure.desktop/local-dev"
+  export SURE_DESKTOP_DEV=1
+fi
+[ -x "$RT/ruby/bin/ruby" ] || { echo "No bundled runtime in $RT (set SURE_APP, or build one with npm run runtime:mac)" >&2; exit 1; }
 [ -f "$DATA/secrets.json" ] || { echo "No local data in $DATA; launch Sure first" >&2; exit 1; }
 
 secret() { "$RT/ruby/bin/ruby" -rjson -e 'print JSON.parse(File.read(ARGV[0])).fetch(ARGV[1], "").to_s' "$DATA/secrets.json" "$1"; }

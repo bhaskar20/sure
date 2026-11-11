@@ -46,9 +46,21 @@ Everything below runs from `desktop/` after `npm ci`.
 | `npm run runtime:mac` | Build the whole bundled runtime into `runtime/` (Ruby, Rails app, PostgreSQL, Valkey, llama-server, libvips). Downloads are cached in `build/`. | ~15 min first time |
 | `npm run runtime:app` | Re-stage only the Rails app into `runtime/` after changing Rails code | ~1 min |
 | `npm run dev:local` | Run the app in dev mode against `runtime/` in place: frontend hot reload, Rust rebuilt on change | ~10 s to a running Sure |
+| `npm run seed:dev` | With `dev:local` running: add test accounts and the demo family to dev data (safe to re-run) | ~1.5 min first time |
 | `npm run build:app` | Build `Sure.app` (copies `runtime/` into the bundle) | ~2 min |
 | `npm run build:mac` | Build `Sure.app` and the `.dmg` | ~3 min |
 | `npm run test:rust` / `test:smoke` | Rust tests / boot `runtime/` end to end | seconds / ~30 s |
+
+`seed:dev` creates these sign-ins (local development fixtures only):
+
+| Email | Password | What's there |
+|---|---|---|
+| `desktop-tester@example.com` | `SureDesktop-dev1!` | Admin of a small household: checking + credit card, categories, ~2 months of transactions, a rule, a few uncategorized rows to try AI categorization on |
+| `dev-member@example.com` | `SureDesktop-dev1!` | Member of the same household |
+| `user@example.com` (or `demo@example.com` if that address was already signed up) | `Password1!` | Sure's demo family: ~8,700 transactions, investments, budgets, goals |
+
+`scripts/local-rails.sh --dev …` runs any other Rails command (`console`,
+`runner`, rake tasks) against the dev data.
 
 Dev mode keeps its data in `…/app.sure.desktop/local-dev/`, separate from an
 installed Sure's `local/`, so both can run at once. Ctrl+C (or SIGTERM) quits
