@@ -4,3 +4,5 @@ src-tauri/target/
 src-tauri/gen/
 runtime/
 build/
+# The repo-wide ignore of scripts/ must not hide the runtime build scripts.
+!scripts/
