@@ -117,7 +117,7 @@ maxmemory-policy noeviction
 daemonize no
 "@ | Set-Content -Encoding ascii (Join-Path $vkTest "valkey.conf")
 Get-Content (Join-Path $vkTest "valkey.conf")
-$proc = Start-Process -FilePath $valkeyExe -ArgumentList "`"$(Join-Path $vkTest 'valkey.conf')`"" -PassThru -NoNewWindow `
+$proc = Start-Process -FilePath $valkeyExe -ArgumentList "valkey.conf" -WorkingDirectory $vkTest -PassThru -NoNewWindow `
   -RedirectStandardOutput (Join-Path $vkTest "out.log") -RedirectStandardError (Join-Path $vkTest "err.log")
 Start-Sleep -Seconds 3
 $alive = -not $proc.HasExited
