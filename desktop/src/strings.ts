@@ -20,3 +20,33 @@ export const P = {
   launchAtLogin: "Launch Sure at login",
   switchTo: "Switch to",
 } as const;
+
+export const AI = {
+  title: "Local AI",
+  intro:
+    "Run an AI model on this computer for Sure's assistant and auto-categorization. Nothing is sent online. Models are downloaded once.",
+  enable: "Use a local AI model",
+  context: "Context size (tokens)",
+  customTitle: "Add a model (GGUF)",
+  customName: "Name",
+  customSource: "https:// URL or full path to a .gguf file",
+  add: "Add",
+  download: "Download",
+  cancel: "Cancel",
+  use: "Use",
+  inUse: "In use",
+  delete: "Delete",
+  retry: "Dismiss",
+  recommended: "Recommended",
+  custom: "Custom",
+  ram: (gb: number) => `~${gb} GB memory`,
+  off: "Off. Sure uses the AI provider set in Settings → Self-Hosting, if any.",
+  noModel: "Choose or download a model below.",
+  starting: (name: string) => `Loading ${name}…`,
+  running: (name: string) => `Running ${name}.`,
+  failed: (msg: string) => `The model stopped: ${msg}`,
+  downloading: (got: string, total: string) => `Downloading… ${got} of ${total}`,
+  folder: (path: string) => `Models are stored in ${path}`,
+  unavailable: "Local AI is available when Sure runs on this computer (packaged builds).",
+  confirmDelete: "Confirm delete",
+} as const;

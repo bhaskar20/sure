@@ -28,8 +28,8 @@
       {
         "label": "prefs",
         "title": "Preferences",
-        "width": 420,
-        "height": 520,
+        "width": 560,
+        "height": 760,
         "visible": false,
         "transparent": false,
         "titleBarStyle": "Overlay",
@@ -43,8 +43,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
-    "icon": ["icons/icon.icns"],
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [
+      "icons/icon.icns"
+    ],
     "category": "public.app-category.finance",
     "macOS": {
       "signingIdentity": "-"
@@ -52,7 +57,11 @@
   },
   "plugins": {
     "deep-link": {
-      "desktop": { "schemes": ["sure"] }
+      "desktop": {
+        "schemes": [
+          "sure"
+        ]
+      }
     }
   }
 }
