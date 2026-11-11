@@ -258,6 +258,21 @@ fn boot(app: &AppHandle, rt: &Runtime, data: &DataDir) -> Result<(), String> {
         return Err(format!("Database setup failed ({status}). {}", tail(&rails_log)));
     }
 
+    // Installs from before the app generated encryption keys hold plaintext in
+    // encryptable columns: encrypt them once, then run with encryption only.
+    let mut secrets = secrets;
+    if secrets.support_unencrypted_data {
+        step("Encrypting existing data");
+        let mut encrypt = rails_command(rt, data, &secrets, &rails_log)?;
+        encrypt.arg("bin/rails").arg("desktop:encrypt_existing_data");
+        let status = encrypt.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
+        if !status.success() {
+            return Err(format!("Encrypting existing data failed ({status}). {}", tail(&rails_log)));
+        }
+        secrets.support_unencrypted_data = false;
+        save_secrets(data, &secrets)?;
+    }
+
     step("Starting Sure");
     let mut web = rails_command(rt, data, &secrets, &rails_log)?;
     web.args(["bin/desktop-puma", "-C", "config/puma.rb"]);
@@ -349,9 +364,13 @@ pub fn load_or_create_secrets(data: &DataDir) -> Result<Secrets, String> {
         }
         taken.push(*port);
     }
-    let json = serde_json::to_string_pretty(&secrets).map_err(|e| e.to_string())?;
-    write_private(&path, json.as_bytes())?;
+    save_secrets(data, &secrets)?;
     Ok(secrets)
+}
+
+fn save_secrets(data: &DataDir, secrets: &Secrets) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(secrets).map_err(|e| e.to_string())?;
+    write_private(&data.secrets(), json.as_bytes())
 }
 
 fn init_db(rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Result<(), String> {
