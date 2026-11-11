@@ -1,8 +1,69 @@
-# Sure Desktop (macOS)
+# Sure Desktop (macOS + Windows)
 
-Native macOS shell (Tauri 2 + WKWebView) that renders the full Sure web app and
-wraps it in real Mac chrome. It always talks to a Sure server you already run
-(self-hosted or managed) — same trust model as a browser.
+Native shell (Tauri 2) that renders the full Sure web app. It has two modes:
+
+- **Local (packaged builds):** Sure runs entirely on this computer: no server,
+  no Docker, no account anywhere else. This is what the `.dmg` and the Windows
+  installer ship.
+- **Remote (`tauri dev` / builds without the runtime):** connects to a Sure
+  server you already run, same trust model as a browser.
+
+## Local mode
+
+A packaged build bundles a `runtime/` resource folder:
+
+| Folder | Contents |
+| --- | --- |
+| `ruby/` | Relocatable Ruby (built from source on macOS with static OpenSSL/libyaml; RubyInstaller on Windows) |
+| `app/` | The Rails app: production gems vendored, assets precompiled |
+| `postgres/` | PostgreSQL server ([zonky embedded binaries](https://github.com/zonkyio/embedded-postgres-binaries)) |
+| `valkey/` | `valkey-server`, a BSD-licensed Redis-compatible server, for Sidekiq + cache |
+| `ssl/` | CA bundle for outbound HTTPS (exchange rates, bank sync providers) |
+
+On launch, `src-tauri/src/local_backend.rs` starts PostgreSQL, Valkey and
+Puma (with Sidekiq embedded in the Puma process, see `config/puma.rb`), all
+bound to `127.0.0.1` with generated passwords. It runs `db:prepare` and opens
+the main window on the local server once `/up` answers. Quitting the app stops
+all three. All state lives in the app's local data folder:
+
+- macOS: `~/Library/Application Support/app.sure.desktop/local/`
+- Windows: `%LOCALAPPDATA%\app.sure.desktop\local\`
+
+The folder holds `secrets.json` (the Rails secret, which also derives the
+encryption keys, so back it up with the data), `pgdata/`, `valkey/`, `storage/`
+(uploads) and `logs/`. On the first launch you create your account on the
+local Sure, exactly like a fresh self-hosted install.
+
+### Build a local-mode DMG (macOS)
+```bash
+cd desktop
+npm ci
+scripts/build-runtime-macos.sh          # ~15 min first time; downloads are cached in build/
+npx tauri build --config src-tauri/tauri.local.conf.json
+# Output: src-tauri/target/release/bundle/dmg/Sure_<ver>_<arch>.dmg
+```
+Build on the target architecture (Apple Silicon or Intel). Set
+`APPLE_SIGNING_IDENTITY` to sign the bundled executables for notarization.
+
+### Build the Windows installer (.exe)
+On Windows x64 with Git for Windows, 7-Zip, Node, Rust and MSYS2 at `C:\msys64`:
+```bash
+# In an MSYS2 MSYS shell:
+desktop/scripts/build-valkey-msys2.sh
+# In PowerShell:
+desktop/scripts/build-runtime-windows.ps1
+cd desktop; npm ci; npx tauri build --config src-tauri/tauri.local.conf.json
+# Output: src-tauri/target/release/bundle/nsis/Sure_<ver>_x64-setup.exe
+```
+
+CI does both in `.github/workflows/desktop-local-build.yml` (manual run, or push
+a `desktop-v*` tag).
+
+### Troubleshooting
+If startup fails, the window shows the error and the logs folder
+(`postgres.log`, `valkey.log`, `rails.log`).
+
+## Remote mode
 
 ## Requirements
 - Rust (stable), Node 18+, Xcode command line tools, macOS 12+.

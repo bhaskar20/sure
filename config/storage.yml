@@ -1,6 +1,8 @@
 local:
   service: Disk
-  root: <%= Rails.root.join("storage") %>
+  # The desktop app keeps uploads in the user's data folder, because the app
+  # bundle itself is read-only once installed.
+  root: <%= ENV["ACTIVE_STORAGE_ROOT"].presence || Rails.root.join("storage") %>
 
 test:
   service: Disk

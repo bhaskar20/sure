@@ -2,6 +2,7 @@ pub mod attachments;
 pub mod badge;
 pub mod commands;
 pub mod deep_link;
+pub mod local_backend;
 pub mod menu;
 pub mod notifications;
 pub mod servers;
@@ -21,6 +22,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_deep_link::init())
         .manage(AppState::default())
+        .manage(local_backend::LocalBackend::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::add_server,
@@ -31,9 +33,13 @@ pub fn run() {
             commands::get_launch_at_login,
             commands::set_launch_at_login,
             commands::start_sso,
+            local_backend::local_backend_status,
         ])
         .setup(|app| {
             window::setup(app)?;
+            // Packaged builds run Sure on this computer; the main window shows
+            // progress and opens the local server once it answers.
+            local_backend::start(app.handle());
             let menu = menu::build(app.handle())?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()));
@@ -144,8 +150,14 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running Sure Desktop")
         .run(|app, event| {
+            // Stop the local database, job queue and web server with the app.
+            if let tauri::RunEvent::Exit = event {
+                local_backend::stop(app);
+                return;
+            }
             // Clicking the dock icon (while the main window is hidden, not
             // destroyed) fires Reopen — re-show and focus the main window.
+            #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 use tauri::Manager;
                 if let Some(w) = app.get_webview_window("main") {

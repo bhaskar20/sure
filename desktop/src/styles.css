@@ -117,6 +117,7 @@ body { background: var(--bg); color: var(--text); }
 .btn-primary:hover { opacity: 0.9; }
 
 .status {
+  white-space: pre-line;
   min-height: 16px;
   margin: 0;
   font-size: 13px;

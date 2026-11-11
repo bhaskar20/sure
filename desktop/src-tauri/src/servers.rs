@@ -213,6 +213,9 @@ pub fn is_known_server(url: &str) -> bool {
     let Ok(canonical) = normalize_server_url(url) else {
         return false;
     };
+    if crate::local_backend::local_url().is_some_and(|local| base_covers(&local, &canonical)) {
+        return true;
+    }
     ServerStore::load().iter().any(|e| base_covers(&e.url, &canonical))
         || load_active().is_some_and(|active| base_covers(&active, &canonical))
 }

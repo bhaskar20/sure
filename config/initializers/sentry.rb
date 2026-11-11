@@ -21,6 +21,6 @@ if ENV["SENTRY_DSN"].present?
     config.profiles_sample_rate = 0.25
 
     config.release = Rails.root.join(".sure-version").read.strip rescue nil
-    config.profiler_class = Sentry::Vernier::Profiler
+    config.profiler_class = Sentry::Vernier::Profiler if defined?(::Vernier)
   end
 end

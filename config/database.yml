@@ -1,7 +1,9 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 3 } %>
+  # DB_POOL lets a process that runs Sidekiq embedded in Puma (Sure Desktop)
+  # size the pool for web + job threads together.
+  pool: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS") { 3 } } %>
   host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
   port: <%= ENV.fetch("DB_PORT") { "5432" } %>
   username: <%= ENV.fetch("POSTGRES_USER") { nil } %>

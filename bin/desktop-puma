@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+# Entry point the Sure Desktop launcher uses to start Puma with the bundled
+# Ruby, without relying on a `bundle` binstub or a shebang being resolvable.
+# Arguments are passed straight to Puma (for example `-C config/puma.rb`).
+require_relative "../config/boot"
+load Gem.bin_path("puma", "puma")
