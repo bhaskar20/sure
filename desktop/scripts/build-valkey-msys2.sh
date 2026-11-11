@@ -25,5 +25,11 @@ sed -i 's/__GNU_VISIBLE/1/' /usr/include/dlfcn.h
 
 rm -rf "$OUT" && mkdir -p "$OUT"
 cp valkey/src/valkey-server.exe "$OUT/"
-cp /usr/bin/msys-2.0.dll "$OUT/"
+# Ship every MSYS2 runtime DLL the server loads (msys-2.0.dll, and e.g. the
+# gcc runtime), so it starts on machines without MSYS2.
+ldd "$OUT/valkey-server.exe"
+ldd "$OUT/valkey-server.exe" | awk '$3 ~ /^\/usr\/bin\// { print $3 }' | sort -u | while read -r dll; do
+  cp "$dll" "$OUT/"
+done
+ls -la "$OUT"
 "$OUT/valkey-server.exe" --version
