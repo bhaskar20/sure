@@ -82,8 +82,16 @@ fn dump_logs(data: &DataDir) {
     files.push(data.valkey().join("valkey.conf"));
     for f in files {
         let text = std::fs::read_to_string(&f).unwrap_or_else(|e| format!("<unreadable: {e}>"));
-        let tail: Vec<&str> = text.lines().rev().take(40).collect();
-        eprintln!("----- {} -----", f.display());
+        eprintln!("----- {} (error lines) -----", f.display());
+        let errors = text.lines().filter(|l| {
+            !l.trim_start().starts_with("from ") && !l.contains(".rb:") && !l.contains("does not exist")
+                && ["Error", "error:", "aborted", "FATAL", "ERROR", "No such"].iter().any(|k| l.contains(k))
+        });
+        for line in errors.take(30) {
+            eprintln!("{line}");
+        }
+        eprintln!("----- {} (last lines) -----", f.display());
+        let tail: Vec<&str> = text.lines().rev().take(15).collect();
         for line in tail.into_iter().rev() {
             eprintln!("{line}");
         }
