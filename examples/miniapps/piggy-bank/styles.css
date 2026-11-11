@@ -1,0 +1,818 @@
+/* Piggy Bank: big, bright and high contrast for small hands and new readers. */
+
+:root {
+  color-scheme: light;
+  --bg: #fff7e6;
+  --card: #ffffff;
+  --ink: #1a1a1a;
+  --muted: #4a4a4a;
+  --line: #1a1a1a;
+  --pig: #ff9ebb;
+  --pig-dark: #7a1f3d;
+  --pig-fill: #ffc83d;
+  --add: #1f8a3b;
+  --add-ink: #ffffff;
+  --spend: #c2410c;
+  --spend-ink: #ffffff;
+  --danger: #b42318;
+  --focus: #1d4ed8;
+  --gold: #ffcf33;
+  --gold-edge: #a16207;
+  --silver: #e5e7eb;
+  --silver-edge: #6b7280;
+  --copper: #f4a261;
+  --copper-edge: #9a3412;
+  --notice: #fff1c2;
+  font-family: "Comic Sans MS", "Chalkboard SE", "Trebuchet MS", system-ui,
+    sans-serif;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 28px;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 4px solid var(--focus);
+  outline-offset: 3px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.center {
+  text-align: center;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.big-text {
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+}
+
+.row > * {
+  flex: 1;
+}
+
+.row.wrap {
+  flex-wrap: wrap;
+}
+
+/* ---- Top bar and grown-up button ---- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topbar h1 {
+  margin: 0;
+}
+
+.hold-button {
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+  padding: 6px 14px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 15px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.hold-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--notice);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.hold-button.holding .hold-fill {
+  transform: scaleX(1);
+  transition: transform 2s linear;
+}
+
+.hold-label {
+  position: relative;
+}
+
+.hold-hint {
+  margin: -8px 0 0;
+  text-align: right;
+  font-size: 15px;
+}
+
+/* ---- Goal card ---- */
+
+.goal-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 3px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  text-align: left;
+}
+
+.goal-emoji {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.goal-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.goal-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.goal-left {
+  font-size: 17px;
+}
+
+.progress {
+  display: block;
+  height: 18px;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.progress-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--add);
+  transition: width 0.6s ease;
+}
+
+/* ---- The pig ---- */
+
+.pig-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding-top: 24px;
+}
+
+.pig {
+  width: min(280px, 80%);
+  height: auto;
+  overflow: visible;
+}
+
+.pig.wiggle {
+  animation: wiggle 0.5s ease;
+}
+
+.pig-body {
+  fill: var(--pig);
+}
+
+.pig-outline {
+  fill: none;
+  stroke: var(--pig-dark);
+  stroke-width: 5;
+}
+
+.pig-fill {
+  fill: var(--pig-fill);
+  opacity: 0.9;
+  transform: scaleY(0);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pig-ear,
+.pig-leg {
+  fill: var(--pig);
+  stroke: var(--pig-dark);
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.pig-tail,
+.pig-mouth {
+  fill: none;
+  stroke: var(--pig-dark);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.pig-slot {
+  fill: var(--pig-dark);
+}
+
+.pig-eye,
+.pig-nostril {
+  fill: var(--pig-dark);
+}
+
+.pig-snout {
+  fill: #ffc2d4;
+  stroke: var(--pig-dark);
+  stroke-width: 5;
+}
+
+.coin-drop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.coin-drop .coin.falling {
+  position: absolute;
+  left: calc(50% - 4px);
+  top: -20px;
+  animation: drop 0.6s ease-in forwards;
+}
+
+.pig-emoji,
+.celebrate-emoji {
+  font-size: 96px;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ---- Coins ---- */
+
+.total {
+  margin: 0;
+  text-align: center;
+}
+
+.total-figure {
+  font-size: 48px;
+  font-weight: 800;
+}
+
+.coin-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  min-height: 8px;
+}
+
+/* Reserve a row of coins up front so the coin buttons below never jump
+   while a child is tapping them. */
+#total-coins {
+  min-height: 34px;
+}
+
+.coin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--gold-edge);
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+.coin-1 {
+  background: var(--copper);
+  border-color: var(--copper-edge);
+}
+
+.coin-2 {
+  background: var(--silver);
+  border-color: var(--silver-edge);
+}
+
+.coin-5 {
+  width: 38px;
+  height: 38px;
+}
+
+.coin-10 {
+  width: 42px;
+  height: 42px;
+  box-shadow: inset 0 0 0 3px #fff3b0;
+}
+
+.coin-more {
+  align-self: center;
+  font-weight: 700;
+}
+
+.coin-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  justify-items: center;
+}
+
+.coin-buttons .coin {
+  width: 76px;
+  height: 76px;
+  font-size: 30px;
+  border-width: 5px;
+  box-shadow: 0 5px 0 var(--line);
+  padding: 0;
+}
+
+.coin-buttons .coin:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.section-title {
+  margin: 8px 0 0;
+  text-align: center;
+}
+
+/* ---- Big buttons ---- */
+
+.big-button {
+  min-height: 64px;
+  padding: 12px 20px;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  font-size: 24px;
+  font-weight: 800;
+  box-shadow: 0 5px 0 var(--line);
+}
+
+.big-button:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.big-button.small {
+  min-height: 48px;
+  font-size: 18px;
+  box-shadow: 0 3px 0 var(--line);
+}
+
+.big-button.add {
+  background: var(--add);
+  color: var(--add-ink);
+}
+
+.big-button.spend {
+  background: var(--spend);
+  color: var(--spend-ink);
+}
+
+.big-button.plain {
+  background: var(--card);
+}
+
+.big-button.danger {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.link-button {
+  align-self: center;
+  min-height: 44px;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  font-size: 18px;
+}
+
+.bonus-banner {
+  margin: 0;
+  padding: 12px 16px;
+  border: 3px dashed var(--add);
+  border-radius: 16px;
+  background: var(--card);
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* ---- History ---- */
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "icon label amount"
+    "icon when amount";
+  column-gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.history-icon {
+  grid-area: icon;
+  font-size: 32px;
+}
+
+.history-label {
+  grid-area: label;
+  font-weight: 700;
+}
+
+.history-when {
+  grid-area: when;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.history-amount {
+  grid-area: amount;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.history li.in .history-amount {
+  color: var(--add);
+}
+
+.history li.out .history-amount {
+  color: var(--spend);
+}
+
+/* ---- Goal picker ---- */
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.emoji-choice {
+  min-height: 72px;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  font-size: 40px;
+}
+
+.emoji-choice[aria-checked="true"] {
+  background: var(--gold);
+  box-shadow: 0 0 0 4px var(--add);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.field-label {
+  margin: 0;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.gate-form input {
+  min-height: 56px;
+  padding: 8px 14px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 22px;
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.6fr 1fr 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.step {
+  min-height: 60px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.step-value {
+  text-align: center;
+  font-size: 30px;
+  font-weight: 800;
+}
+
+/* ---- Spend ---- */
+
+.step-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#spend-figure {
+  font-size: 44px;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 10px;
+  border: 3px solid var(--line);
+  border-radius: 20px;
+  font-size: 22px;
+  box-shadow: 0 5px 0 var(--line);
+}
+
+.choice.need {
+  background: #dcfce7;
+}
+
+.choice.want {
+  background: #fde2e4;
+}
+
+.choice-emoji {
+  font-size: 60px;
+  line-height: 1;
+}
+
+.choice-hint {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* ---- Celebrate ---- */
+
+.celebrate {
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  min-height: 420px;
+}
+
+.celebrate-emoji {
+  font-size: 120px;
+  animation: bounce 1s ease infinite;
+}
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.confetti span {
+  position: absolute;
+  top: -40px;
+  animation: confetti 2.6s ease-in forwards;
+}
+
+/* ---- Grown-up screens ---- */
+
+.gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.parent {
+  font-size: 17px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 2px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.card p {
+  margin: 0;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--notice);
+  border: 2px solid var(--gold-edge);
+}
+
+.segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.segmented button {
+  flex: 1;
+  min-height: 48px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  font-weight: 700;
+}
+
+.segmented button[aria-checked="true"] {
+  background: var(--add);
+  color: var(--add-ink);
+}
+
+.danger-zone {
+  border-color: var(--danger);
+}
+
+/* ---- Toast ---- */
+
+/* Overlaid, not in the flow: a message must not push buttons out from under
+   a finger. */
+main {
+  position: relative;
+}
+
+.toast {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  margin: 0;
+  padding: 12px 16px;
+  border: 3px solid var(--line);
+  border-radius: 14px;
+  background: var(--notice);
+  font-weight: 700;
+}
+
+.toast.error {
+  background: #fee4e2;
+  border-color: var(--danger);
+}
+
+/* ---- Animations ---- */
+
+@keyframes drop {
+  from {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(64px) rotate(180deg) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes confetti {
+  to {
+    transform: translateY(520px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .coin-buttons .coin {
+    width: 64px;
+    height: 64px;
+    font-size: 24px;
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .stepper {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .step-value {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}

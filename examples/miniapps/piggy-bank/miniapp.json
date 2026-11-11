@@ -1,0 +1,12 @@
+{
+  "id": "piggy-bank",
+  "name": "Piggy Bank",
+  "version": "1.0.0",
+  "description": "A piggy bank for young children, used together with a grown-up. Pick a goal, drop in coins, learn to wait for what you want and watch a weekly bonus make savings grow. A grown-up can mirror it to a real Sure account.",
+  "entry": "index.html",
+  "icon": "piggy-bank",
+  "permissions": ["accounts:read", "transactions:write"],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure"
+}

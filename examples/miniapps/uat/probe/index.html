@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UAT probe</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <h1>UAT probe</h1>
+      <p id="uat-status" class="muted">Connecting to Sure…</p>
+      <p id="uat-summary"></p>
+      <button type="button" id="uat-run-all">Run all automatic checks</button>
+      <ol id="uat-checks"></ol>
+      <div id="tall-block" hidden></div>
+    </main>
+
+    <script src="sure-miniapp.js"></script>
+    <script src="uat.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

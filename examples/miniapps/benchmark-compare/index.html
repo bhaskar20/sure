@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Benchmark Compare</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Benchmark Compare</h1>
+        <p class="muted">Am I doing better than if I had just bought an index fund?</p>
+        <p id="status" class="muted" role="status">Connecting to Sure…</p>
+        <p id="missing" class="notice" hidden></p>
+      </header>
+
+      <section class="panel controls" aria-labelledby="setup-heading">
+        <h2 id="setup-heading">Setup</h2>
+        <div class="grid-2">
+          <fieldset>
+            <legend>Accounts</legend>
+            <div id="accounts" class="checklist"></div>
+            <label class="check small">
+              <input type="checkbox" id="show-all-accounts">
+              Show every asset account, not only investment and crypto
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Benchmarks</legend>
+            <div id="benchmarks" class="checklist"></div>
+            <label class="small">
+              Headline comparison
+              <select id="primary-benchmark"></select>
+            </label>
+          </fieldset>
+        </div>
+        <div class="toolbar">
+          <label>
+            Period
+            <select id="period">
+              <option value="last_365_days">Last 12 months</option>
+              <option value="last_5_years">Last 5 years</option>
+              <option value="last_10_years">Last 10 years</option>
+              <option value="all_time">All time</option>
+            </select>
+          </label>
+          <label>
+            Contributions
+            <select id="flow-mode">
+              <option value="auto">Detect from transfers and deposits</option>
+              <option value="all">Every cash movement except income and fees</option>
+              <option value="none">Ignore (raw balance growth)</option>
+            </select>
+          </label>
+          <button type="button" id="refresh" class="secondary">Reload data</button>
+        </div>
+      </section>
+
+      <section id="results" hidden>
+        <div id="notes" class="notes" hidden></div>
+
+        <section class="panel">
+          <h2>Verdict</h2>
+          <div id="verdict"></div>
+        </section>
+
+        <div id="cards" class="cards"></div>
+
+        <section class="panel">
+          <div class="chart-head">
+            <h2 id="chart-title">Growth</h2>
+            <label class="small">
+              Show
+              <select id="chart-mode">
+                <option value="value">What your contributions became</option>
+                <option value="growth">Growth of 100 (time-weighted)</option>
+              </select>
+            </label>
+          </div>
+          <div id="chart" class="chart"></div>
+          <ul id="legend" class="legend"></ul>
+          <p id="chart-readout" class="muted small" aria-live="polite"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Side by side</h2>
+          <div class="table-wrap">
+            <table>
+              <thead id="compare-head"></thead>
+              <tbody id="compare-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Year by year</h2>
+          <div class="table-wrap">
+            <table>
+              <thead id="years-head"></thead>
+              <tbody id="years-body"></tbody>
+            </table>
+          </div>
+          <p class="muted small">Partial years (marked *) cover only the part of the year inside the window.</p>
+        </section>
+
+        <section class="panel" id="holdings-panel" hidden>
+          <h2>Current holdings</h2>
+          <div id="holdings"></div>
+        </section>
+
+        <details class="panel">
+          <summary><h2>Contributions and withdrawals found</h2></summary>
+          <p class="muted small">
+            Money you add or take out is not investment performance, so it is taken out of the
+            return. Change a row if it was sorted wrongly; your choice is remembered.
+          </p>
+          <div id="flows"></div>
+        </details>
+
+        <details class="panel">
+          <summary><h2>How this is worked out</h2></summary>
+          <div class="method">
+            <p>
+              <strong>Your portfolio value</strong> is Sure's daily balance history for the accounts you
+              picked (sampled weekly or monthly for long periods), added together. Holdings and cash both count.
+            </p>
+            <p>
+              <strong>Contributions and withdrawals</strong> come from the accounts' transactions:
+              transfers from accounts outside your selection, and rows that read like deposits or withdrawals.
+              Dividends, interest and fees stay inside the return. Transfers between the accounts you picked
+              cancel out. If an account starts part-way through, its opening balance counts as a contribution.
+            </p>
+            <p>
+              <strong>Time-weighted return (TWR)</strong> measures the investments themselves: each stretch
+              between two balance readings gets a return (Modified Dietz, weighting each flow by how long it
+              was invested), and the stretches are compounded. Your deposit timing does not affect it, so it
+              is the fair number to put next to an index.
+            </p>
+            <p>
+              <strong>Money-weighted return (MWR, XIRR)</strong> is the single yearly rate that turns your
+              actual deposits and withdrawals into today's value. It includes your timing: adding a lot just
+              before a fall lowers it.
+            </p>
+            <p>
+              <strong>Benchmark replay</strong> buys the benchmark with your starting value and with every
+              contribution on the day you made it, and sells it on every withdrawal, so the "would have
+              become" figure uses exactly your cash flows.
+            </p>
+            <p>
+              <strong>Benchmark data</strong> is calendar-year total returns, spread evenly through each year.
+              It is bundled with the app, approximate, and editable below. Nothing is downloaded.
+            </p>
+          </div>
+        </details>
+
+        <section class="panel">
+          <h2>Before you read too much into this</h2>
+          <ul id="caveats" class="caveats"></ul>
+        </section>
+      </section>
+
+      <details class="panel" id="editor-panel">
+        <summary><h2>Benchmark data</h2></summary>
+        <p id="dataset-note" class="muted small"></p>
+        <div class="toolbar">
+          <label>
+            Benchmark
+            <select id="edit-select"></select>
+          </label>
+        </div>
+        <form id="edit-form" class="editor">
+          <label>
+            Name
+            <input type="text" id="edit-name" maxlength="80" required>
+          </label>
+          <label>
+            Source
+            <input type="text" id="edit-source" maxlength="200">
+          </label>
+          <label>
+            Calendar-year total returns, in percent, one year per line
+            <textarea id="edit-returns" rows="10" spellcheck="false"></textarea>
+          </label>
+          <p class="muted small">
+            Example: <code>2024: 25.0</code>. The latest year can be partial:
+            <code>2026: 9.1 through 2026-10-31</code>. Years must be consecutive.
+          </p>
+          <p id="edit-message" class="small" role="status"></p>
+          <div class="toolbar">
+            <button type="submit" id="edit-save">Save</button>
+            <button type="button" id="edit-reset" class="secondary">Restore bundled figures</button>
+            <button type="button" id="edit-delete" class="secondary">Delete benchmark</button>
+          </div>
+        </form>
+      </details>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="benchmarks-data.js"></script>
+    <script src="returns-math.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,403 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #141414;
+  --muted: #5c5c5c;
+  --border: #e5e5e5;
+  --surface: #fafafa;
+  --accent: #141414;
+  --accent-fg: #ffffff;
+  --error: #c4320a;
+  --good: #079455;
+  --bad: #d92d20;
+  --series-actual: #141414;
+  --series-contrib: #8a8a8a;
+  --series-0: #2e6fdb;
+  --series-1: #d9730d;
+  --series-2: #12a594;
+  --series-3: #b54ed6;
+  --series-4: #c4320a;
+  --series-5: #6b7c2f;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171717;
+    --fg: #f5f5f5;
+    --muted: #a3a3a3;
+    --border: #333333;
+    --surface: #1f1f1f;
+    --accent: #f5f5f5;
+    --accent-fg: #171717;
+    --error: #f97066;
+    --good: #47cd89;
+    --bad: #f97066;
+    --series-actual: #f5f5f5;
+    --series-contrib: #8a8a8a;
+    --series-0: #6ea0f5;
+    --series-1: #f2a65a;
+    --series-2: #4fd1c0;
+    --series-3: #d18ce8;
+    --series-4: #f97066;
+    --series-5: #b6c46a;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 960px;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+p {
+  margin: 4px 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.error {
+  color: var(--error);
+}
+
+.good {
+  color: var(--good);
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.panel {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+details.panel > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+
+details.panel > summary h2 {
+  display: inline;
+}
+
+.notice {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.notes {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--series-1);
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0;
+  margin-bottom: 4px;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.check {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.check.disabled {
+  color: var(--muted);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+select,
+input[type="text"],
+textarea {
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.card .label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card .value {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.card .hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.verdict-lead {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+}
+
+.chart .axis text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.chart .gridline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart .line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.chart .cursor {
+  stroke: var(--muted);
+  stroke-dasharray: 3 3;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
+.s-actual {
+  stroke: var(--series-actual);
+  background: var(--series-actual);
+}
+
+.s-contrib {
+  stroke: var(--series-contrib);
+  background: var(--series-contrib);
+  stroke-dasharray: 5 4;
+}
+
+.s-0 {
+  stroke: var(--series-0);
+  background: var(--series-0);
+}
+
+.s-1 {
+  stroke: var(--series-1);
+  background: var(--series-1);
+}
+
+.s-2 {
+  stroke: var(--series-2);
+  background: var(--series-2);
+}
+
+.s-3 {
+  stroke: var(--series-3);
+  background: var(--series-3);
+}
+
+.s-4 {
+  stroke: var(--series-4);
+  background: var(--series-4);
+}
+
+.s-5 {
+  stroke: var(--series-5);
+  background: var(--series-5);
+}
+
+.line.s-actual {
+  stroke-width: 2.5;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.method p {
+  margin: 8px 0;
+}
+
+.caveats {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.caveats li {
+  margin: 4px 0;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}

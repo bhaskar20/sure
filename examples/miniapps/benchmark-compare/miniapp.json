@@ -1,0 +1,12 @@
+{
+  "id": "benchmark-compare",
+  "name": "Benchmark Compare",
+  "version": "1.0.0",
+  "description": "Compares your investment accounts with well-known benchmarks (US and global stocks, a 60/40 mix, bonds, inflation, cash). Separates your contributions from growth, shows time- and money-weighted returns, and what your contributions would have become in each benchmark. Works offline with a bundled, editable dataset.",
+  "entry": "index.html",
+  "icon": "chart-line",
+  "permissions": ["accounts:read", "transactions:read", "reports:read"],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure"
+}

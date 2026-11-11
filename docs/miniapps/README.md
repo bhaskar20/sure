@@ -257,7 +257,23 @@ Each app has its own store, separate from every other app and family.
   `nextCursor` back as `cursor` for the next page.
 - Storage survives upgrades and is deleted when the app is uninstalled.
 - Storage is shared by every member of the family who opens the app. Key
-  records by person yourself if you need per-person data.
+  records by person yourself if you need per-person data. The last write wins;
+  there is no compare-and-set yet.
+- Values round-trip, but object key order does not (storage is `jsonb`).
+  Compare stored objects by value, not by `JSON.stringify`.
+
+## Building the UI
+
+- **Let the frame size itself.** Sure grows and shrinks the iframe to fit your
+  content, so the frame never scrolls. Don't give `html` or `body`
+  `height: 100%` or `100vh`, and don't rely on `position: fixed` or `sticky`
+  for messages: overlay them inside your own layout instead.
+- **No browser dialogs.** The sandbox has no `allow-modals`, so `alert()`,
+  `confirm()` and `prompt()` do nothing (`confirm()` returns `false`). Draw your
+  own confirmation for in-app actions. Writes to Sure's data are confirmed by
+  Sure itself.
+- **Keep controls still.** Reserve space for content that appears after a tap
+  (totals, messages), so buttons don't move under someone's finger.
 
 ## Dev mode
 
@@ -352,3 +368,18 @@ calls.
 - [Recategorizer](../../examples/miniapps/recategorizer/): lists transactions,
   creates a category, recategorizes a selected transaction, remembers its
   filter in storage and refreshes when data changes.
+- [Piggy Bank](../../examples/miniapps/piggy-bank/): a savings jar for a young
+  child, with a goal, coins, a weekly grown-up bonus, "need or want?" before
+  spending, and a grown-up mode that records real deposits in a Sure account
+  (Sure asks a grown-up to approve each one).
+- [Goal Planner](../../examples/miniapps/goal-planner/): goal-based investing.
+  Lists life goals, inflation-adjusts targets, works out the monthly saving
+  each needs, suggests an asset mix by horizon, shares the monthly surplus by
+  priority and can create the goal in Sure.
+- [Benchmark Compare](../../examples/miniapps/benchmark-compare/): compares
+  investment accounts with index benchmarks using time- and money-weighted
+  returns, with an offline benchmark dataset you can edit.
+- [UAT probes](../../examples/miniapps/uat/): test instruments for the bridge,
+  the sandbox and network rules. `probe` checks grants, confirmations, storage,
+  resizing and events; `escape` tries to break out of the sandbox; `network`
+  checks the manifest's `network` list.
