@@ -24,6 +24,7 @@ if [ -n "$(secret encryption_primary_key)" ]; then
   export ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY="$(secret encryption_primary_key)"
   export ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY="$(secret encryption_deterministic_key)"
   export ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT="$(secret encryption_key_derivation_salt)"
+  export ACTIVE_RECORD_ENCRYPTION_SUPPORT_UNENCRYPTED_DATA="$(secret support_unencrypted_data)"
 fi
 export DB_HOST=127.0.0.1 DB_PORT="$(secret db_port)" POSTGRES_USER=sure POSTGRES_DB=sure_production
 export POSTGRES_PASSWORD="$(secret db_password)"
