@@ -23,11 +23,41 @@ fn secrets_are_generated_once_and_reused() {
     assert_ne!(ports[1], ports[2]);
 
     let second = load_or_create_secrets(&data).unwrap();
-    // The Rails secret derives the encryption keys: it must never change.
+    // Secrets sign sessions and encrypt data at rest: they must never change.
     assert_eq!(first.secret_key_base, second.secret_key_base);
     assert_eq!(first.db_password, second.db_password);
     // Free ports are kept, so the app keeps the same local origin.
     assert_eq!(first.web_port, second.web_port);
+    assert_eq!(first.encryption_primary_key, second.encryption_primary_key);
+}
+
+#[test]
+fn encryption_keys_are_generated_and_added_to_older_secrets_files() {
+    let data = temp_data("encryption");
+    // A secrets file written before encryption keys existed.
+    std::fs::write(
+        data.secrets(),
+        r#"{"secret_key_base":"abc","db_password":"d","valkey_password":"v","web_port":0,"db_port":0,"valkey_port":0}"#,
+    )
+    .unwrap();
+    let s = load_or_create_secrets(&data).unwrap();
+    assert_eq!(s.secret_key_base, "abc");
+    for key in [&s.encryption_primary_key, &s.encryption_deterministic_key, &s.encryption_key_derivation_salt] {
+        assert_eq!(key.len(), 64);
+    }
+    assert_ne!(s.encryption_primary_key, s.encryption_deterministic_key);
+    // Rows written before the keys existed must stay readable.
+    assert!(s.support_unencrypted_data);
+    let again = load_or_create_secrets(&data).unwrap();
+    assert_eq!(s.encryption_primary_key, again.encryption_primary_key);
+    assert!(again.support_unencrypted_data);
+}
+
+#[test]
+fn fresh_installs_encrypt_everything() {
+    let data = temp_data("fresh-encryption");
+    let s = load_or_create_secrets(&data).unwrap();
+    assert!(!s.support_unencrypted_data);
 }
 
 #[test]
@@ -64,6 +94,8 @@ fn rails_env_points_every_writable_path_at_the_data_folder() {
     assert_eq!(env["DB_HOST"], "127.0.0.1");
     assert_eq!(env["RAILS_FORCE_SSL"], "false");
     assert_eq!(env["SECRET_KEY_BASE"], secrets.secret_key_base);
+    assert_eq!(env["ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY"], secrets.encryption_primary_key);
+    assert_eq!(env["ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT"], secrets.encryption_key_derivation_salt);
     assert_eq!(
         env["REDIS_URL"],
         format!("redis://:{}@127.0.0.1:{}/0", secrets.valkey_password, secrets.valkey_port)
@@ -72,4 +104,8 @@ fn rails_env_points_every_writable_path_at_the_data_folder() {
         assert!(PathBuf::from(&env[key]).starts_with(&data.root), "{key} is outside the data folder");
     }
     assert!(PathBuf::from(&env["BUNDLE_GEMFILE"]).starts_with(rt.app()));
+    #[cfg(target_os = "macos")]
+    assert!(env["DYLD_FALLBACK_LIBRARY_PATH"].starts_with(&rt.libvips().display().to_string()));
+    #[cfg(windows)]
+    assert!(env["PATH"].contains(&rt.libvips().display().to_string()));
 }
