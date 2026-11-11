@@ -171,5 +171,23 @@ $script = (Join-Path $PSScriptRoot "stage-app.sh") -replace '\\', '/'
 & $bash $script $rubyBin $appOut "x64-mingw-ucrt"
 if ($LASTEXITCODE -ne 0) { throw "staging the Rails app failed" }
 
+# Diagnose PostgreSQL connections from the bundled Ruby (pg gem), started the
+# way the app starts it. Informational: it never fails the build.
+Write-Host "==> PostgreSQL connection check"
+$pgTest = Join-Path $Work "pg-connection-test"
+if (Test-Path $pgTest) { Remove-Item -Recurse -Force $pgTest }
+New-Item -ItemType Directory -Force -Path $pgTest | Out-Null
+Set-Content -NoNewline -Encoding ascii (Join-Path $pgTest "pw") "diagpass"
+& (Join-Path $Out "postgres\bin\initdb.exe") -D (Join-Path $pgTest "data") -U sure -A scram-sha-256 -E UTF8 --no-locale "--pwfile=$(Join-Path $pgTest 'pw')" | Out-Null
+& (Join-Path $Out "postgres\bin\pg_ctl.exe") start -w -t 60 -D (Join-Path $pgTest "data") -l (Join-Path $pgTest "postgres.log") `
+  -o "-p 6392 -c listen_addresses=127.0.0.1 -c unix_socket_directories= -c log_connections=on"
+$env:BUNDLE_GEMFILE = Join-Path $Out "app\Gemfile"
+$env:BUNDLE_PATH = Join-Path $Out "app\vendor\bundle"
+& (Join-Path $Out "ruby\bin\ruby.exe") -rbundler/setup (Join-Path $PSScriptRoot "diagnose-pg-connections.rb") 6392 diagpass
+Remove-Item Env:BUNDLE_GEMFILE, Env:BUNDLE_PATH
+& (Join-Path $Out "postgres\bin\pg_ctl.exe") stop -D (Join-Path $pgTest "data") -m fast -w
+Get-Content (Join-Path $pgTest "postgres.log") -Tail 25
+$global:LASTEXITCODE = 0
+
 $size = "{0:N0} MB" -f ((Get-ChildItem $Out -Recurse -File | Measure-Object Length -Sum).Sum / 1MB)
 Write-Host "==> Runtime ready: $Out ($size)"
