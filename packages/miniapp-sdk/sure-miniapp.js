@@ -204,14 +204,23 @@
     let lastHeight = 0;
     let frame = null;
 
+    // scrollHeight is never smaller than the frame's viewport, so reporting it
+    // would let the frame grow but never shrink. Measure the body's own box
+    // plus its margins instead; apps must not give html or body height: 100%.
+    const contentHeight = () => {
+      const body = doc.body;
+      if (!body) return doc.documentElement.getBoundingClientRect().height;
+      const style = globalScope.getComputedStyle(body);
+      return (
+        body.getBoundingClientRect().height +
+        (Number.parseFloat(style.marginTop) || 0) +
+        (Number.parseFloat(style.marginBottom) || 0)
+      );
+    };
+
     const measure = () => {
       frame = null;
-      const height = Math.ceil(
-        Math.max(
-          doc.documentElement.scrollHeight,
-          doc.body ? doc.body.scrollHeight : 0,
-        ),
-      );
+      const height = Math.ceil(contentHeight());
       if (height !== lastHeight) {
         lastHeight = height;
         transport.notify("ui/size-changed", { height });
