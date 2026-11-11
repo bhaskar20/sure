@@ -93,7 +93,7 @@ fn dump_logs(data: &DataDir) {
             eprintln!("{line}");
         }
         eprintln!("----- {} (last lines) -----", f.display());
-        let tail: Vec<&str> = text.lines().rev().take(15).collect();
+        let tail: Vec<&str> = text.lines().rev().take(40).collect();
         for line in tail.into_iter().rev() {
             eprintln!("{line}");
         }
