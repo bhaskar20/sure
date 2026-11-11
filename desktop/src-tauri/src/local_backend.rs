@@ -144,11 +144,19 @@ impl DataDir {
     }
 }
 
+type StatusListener = Box<dyn Fn(&Status) + Send + Sync>;
+
+/// Supervises the local services. The Tauri app holds one as managed state;
+/// tests drive one directly against a built runtime (no window needed).
 #[derive(Default)]
 pub struct LocalBackend {
     status: Mutex<Option<Status>>,
     children: Mutex<Vec<(&'static str, Child)>>,
     shutdown: Mutex<Option<ShutdownPlan>>,
+    listener: Mutex<Option<StatusListener>>,
+    /// PostgreSQL runs under pg_ctl (not as a child we hold): pg_ctl drops
+    /// administrator rights on Windows, where postgres refuses to run elevated.
+    postgres_started: Mutex<bool>,
 }
 
 /// Everything needed to stop the services cleanly, captured at start.
@@ -169,155 +177,223 @@ pub fn local_url() -> Option<String> {
 
 #[tauri::command]
 pub fn local_backend_status(app: AppHandle) -> Status {
-    current_status(&app)
-}
-
-fn current_status(app: &AppHandle) -> Status {
-    app.state::<LocalBackend>()
-        .status
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap_or(Status::NotBundled)
-}
-
-fn set_status(app: &AppHandle, status: Status) {
-    *app.state::<LocalBackend>().status.lock().unwrap() = Some(status.clone());
-    let _ = app.emit(STATUS_EVENT, status);
+    app.state::<LocalBackend>().status()
 }
 
 /// Start the local services on a background thread when this build bundles them.
 pub fn start(app: &AppHandle) {
+    let backend = app.state::<LocalBackend>();
+    {
+        let app = app.clone();
+        backend.on_status(move |status| {
+            let _ = app.emit(STATUS_EVENT, status.clone());
+        });
+    }
     let Some(runtime) = Runtime::locate(app) else {
-        set_status(app, Status::NotBundled);
+        backend.set_status(Status::NotBundled);
         return;
     };
     let data_root = match app.path().app_local_data_dir() {
         Ok(d) => d.join("local"),
         Err(e) => {
-            set_status(app, Status::Failed { message: e.to_string(), logs: String::new() });
+            backend.set_status(Status::Failed { message: e.to_string(), logs: String::new() });
             return;
         }
     };
     let data = DataDir::new(data_root);
-    set_status(app, Status::Starting { step: "Preparing".into() });
+    backend.set_status(Status::Starting { step: "Preparing".into() });
     let app = app.clone();
     std::thread::spawn(move || {
-        if let Err(message) = boot(&app, &runtime, &data) {
-            eprintln!("[sure] local backend failed: {message}");
-            stop(&app);
-            set_status(
-                &app,
-                Status::Failed { message, logs: data.logs().display().to_string() },
-            );
+        let backend = app.state::<LocalBackend>();
+        match backend.boot(&runtime, &data) {
+            Ok(url) => {
+                *LOCAL_URL.lock().unwrap() = Some(url.clone());
+                crate::commands::grant_server_capability(&app, &url);
+                backend.set_status(Status::Ready { url });
+            }
+            Err(message) => {
+                eprintln!("[sure] local backend failed: {message}");
+                backend.stop();
+                backend.set_status(Status::Failed { message, logs: data.logs().display().to_string() });
+            }
         }
     });
 }
 
-fn boot(app: &AppHandle, rt: &Runtime, data: &DataDir) -> Result<(), String> {
-    data.create_all().map_err(|e| format!("Could not create {}: {e}", data.root.display()))?;
-    // A previous run that crashed can leave services behind; stop ours first so
-    // two servers never write the same data files, and so their ports free up
-    // before we pick ports for this run.
-    stop_stale(rt, data);
-    let secrets = load_or_create_secrets(data)?;
-    *app.state::<LocalBackend>().shutdown.lock().unwrap() =
-        Some(ShutdownPlan { runtime: rt.clone(), data: data.clone(), secrets: secrets.clone() });
-
-    let step = |s: &str| set_status(app, Status::Starting { step: s.into() });
-
-    step("Starting database");
-    if !data.pgdata().join("PG_VERSION").is_file() {
-        init_db(rt, data, &secrets)?;
-    }
-    let pg = spawn_logged(
-        Command::new(rt.pg("postgres"))
-            .arg("-D")
-            .arg(data.pgdata())
-            .args(["-p", &secrets.db_port.to_string()])
-            .args(["-c", "listen_addresses=127.0.0.1"])
-            .args(["-c", "unix_socket_directories="])
-            .args(["-c", "max_connections=40"]),
-        &data.logs().join("postgres.log"),
-    )?;
-    remember(app, "postgres", pg);
-    wait_for_port(app, "postgres", secrets.db_port, Duration::from_secs(60))?;
-
-    step("Starting job queue");
-    let valkey_conf = write_valkey_conf(data, &secrets)?;
-    let vk = spawn_logged(Command::new(rt.valkey()).arg(valkey_conf), &data.logs().join("valkey.log"))?;
-    remember(app, "valkey", vk);
-    wait_for_port(app, "valkey", secrets.valkey_port, Duration::from_secs(30))?;
-
-    step("Updating database");
-    let rails_log = data.logs().join("rails.log");
-    let mut prepare = rails_command(rt, data, &secrets, &rails_log)?;
-    prepare.arg("bin/rails").arg("db:prepare");
-    let status = prepare.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
-    if !status.success() {
-        return Err(format!("Database setup failed ({status}). {}", tail(&rails_log)));
-    }
-
-    // Installs from before the app generated encryption keys hold plaintext in
-    // encryptable columns: encrypt them once, then run with encryption only.
-    let mut secrets = secrets;
-    if secrets.support_unencrypted_data {
-        step("Encrypting existing data");
-        let mut encrypt = rails_command(rt, data, &secrets, &rails_log)?;
-        encrypt.arg("bin/rails").arg("desktop:encrypt_existing_data");
-        let status = encrypt.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
-        if !status.success() {
-            return Err(format!("Encrypting existing data failed ({status}). {}", tail(&rails_log)));
-        }
-        secrets.support_unencrypted_data = false;
-        save_secrets(data, &secrets)?;
-    }
-
-    step("Starting Sure");
-    let mut web = rails_command(rt, data, &secrets, &rails_log)?;
-    web.args(["bin/desktop-puma", "-C", "config/puma.rb"]);
-    let web = web.spawn().map_err(|e| format!("Could not start Sure: {e}"))?;
-    remember(app, "rails", web);
-
-    let url = format!("http://127.0.0.1:{}", secrets.web_port);
-    wait_for_http(app, &format!("{url}/up"), Duration::from_secs(180))?;
-
-    *LOCAL_URL.lock().unwrap() = Some(url.clone());
-    crate::commands::grant_server_capability(app, &url);
-    set_status(app, Status::Ready { url });
-    Ok(())
-}
-
-/// Stop all local services: web first, then the job queue, then the database.
+/// Stop the local services with the app.
 pub fn stop(app: &AppHandle) {
-    let backend = app.state::<LocalBackend>();
-    let plan = backend.shutdown.lock().unwrap().clone();
-    let mut children = std::mem::take(&mut *backend.children.lock().unwrap());
-    if children.is_empty() {
-        return;
-    }
-    // Reverse start order: rails, valkey, postgres.
-    children.reverse();
-    for (name, child) in children.iter_mut() {
-        match (*name, &plan) {
-            ("rails", _) => terminate(child),
-            ("valkey", Some(p)) => {
-                let _ = valkey_shutdown(p.secrets.valkey_port, &p.secrets.valkey_password);
-            }
-            ("postgres", Some(p)) => {
-                let _ = pg_ctl_stop(&p.runtime, &p.data);
-            }
-            _ => terminate(child),
-        }
-        if !wait_exit(child, Duration::from_secs(15)) {
-            let _ = child.kill();
-            let _ = child.wait();
-        }
-    }
+    app.state::<LocalBackend>().stop();
 }
 
-fn remember(app: &AppHandle, name: &'static str, child: Child) {
-    app.state::<LocalBackend>().children.lock().unwrap().push((name, child));
+impl LocalBackend {
+    pub fn status(&self) -> Status {
+        self.status.lock().unwrap().clone().unwrap_or(Status::NotBundled)
+    }
+
+    /// Called with every status change (the app forwards them to the window).
+    pub fn on_status(&self, listener: impl Fn(&Status) + Send + Sync + 'static) {
+        *self.listener.lock().unwrap() = Some(Box::new(listener));
+    }
+
+    fn set_status(&self, status: Status) {
+        *self.status.lock().unwrap() = Some(status.clone());
+        if let Some(listener) = self.listener.lock().unwrap().as_ref() {
+            listener(&status);
+        }
+    }
+
+    /// Start PostgreSQL, Valkey and Puma from `rt` with state in `data`, and
+    /// return the local server's URL once it answers. On error the caller
+    /// stops whatever already started.
+    pub fn boot(&self, rt: &Runtime, data: &DataDir) -> Result<String, String> {
+        data.create_all().map_err(|e| format!("Could not create {}: {e}", data.root.display()))?;
+        // A previous run that crashed can leave services behind; stop ours first so
+        // two servers never write the same data files, and so their ports free up
+        // before we pick ports for this run.
+        stop_stale(rt, data);
+        let mut secrets = load_or_create_secrets(data)?;
+        *self.shutdown.lock().unwrap() =
+            Some(ShutdownPlan { runtime: rt.clone(), data: data.clone(), secrets: secrets.clone() });
+
+        let step = |s: &str| self.set_status(Status::Starting { step: s.into() });
+
+        step("Starting database");
+        if !data.pgdata().join("PG_VERSION").is_file() {
+            init_db(rt, data, &secrets)?;
+        }
+        let pg_log = data.logs().join("postgres.log");
+        let options = format!(
+            "-p {} -c listen_addresses=127.0.0.1 -c unix_socket_directories= -c max_connections=40",
+            secrets.db_port
+        );
+        let mut pg_ctl = Command::new(rt.pg("pg_ctl"));
+        pg_ctl
+            .args(["start", "-w", "-t", "60", "-D"])
+            .arg(data.pgdata())
+            .arg("-l")
+            .arg(&pg_log)
+            .args(["-o", &options]);
+        let status = with_log(&mut pg_ctl, &data.logs().join("pg_ctl.log"))?
+            .status()
+            .map_err(|e| format!("Could not start PostgreSQL: {e}"))?;
+        if !status.success() {
+            return Err(format!("PostgreSQL did not start ({status}). {}", tail(&pg_log)));
+        }
+        *self.postgres_started.lock().unwrap() = true;
+        self.wait_for_port("postgres", secrets.db_port, Duration::from_secs(30))?;
+
+        step("Starting job queue");
+        let valkey_conf = write_valkey_conf(data, &secrets)?;
+        let vk = spawn_logged(Command::new(rt.valkey()).arg(valkey_conf), &data.logs().join("valkey.log"))?;
+        self.remember("valkey", vk);
+        self.wait_for_port("valkey", secrets.valkey_port, Duration::from_secs(30))?;
+
+        step("Updating database");
+        let rails_log = data.logs().join("rails.log");
+        let mut prepare = rails_command(rt, data, &secrets, &rails_log)?;
+        prepare.arg("bin/rails").arg("db:prepare");
+        let status = prepare.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
+        if !status.success() {
+            return Err(format!("Database setup failed ({status}). {}", tail(&rails_log)));
+        }
+
+        // Installs from before the app generated encryption keys hold plaintext in
+        // encryptable columns: encrypt them once, then run with encryption only.
+        if secrets.support_unencrypted_data {
+            step("Encrypting existing data");
+            let mut encrypt = rails_command(rt, data, &secrets, &rails_log)?;
+            encrypt.arg("bin/rails").arg("desktop:encrypt_existing_data");
+            let status = encrypt.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
+            if !status.success() {
+                return Err(format!("Encrypting existing data failed ({status}). {}", tail(&rails_log)));
+            }
+            secrets.support_unencrypted_data = false;
+            save_secrets(data, &secrets)?;
+        }
+
+        step("Starting Sure");
+        let mut web = rails_command(rt, data, &secrets, &rails_log)?;
+        web.args(["bin/desktop-puma", "-C", "config/puma.rb"]);
+        let web = web.spawn().map_err(|e| format!("Could not start Sure: {e}"))?;
+        self.remember("rails", web);
+
+        let url = format!("http://127.0.0.1:{}", secrets.web_port);
+        self.wait_for_http(&format!("{url}/up"), Duration::from_secs(180))?;
+        Ok(url)
+    }
+
+    /// Stop all local services: web first, then the job queue, then the database.
+    pub fn stop(&self) {
+        let plan = self.shutdown.lock().unwrap().clone();
+        let mut children = std::mem::take(&mut *self.children.lock().unwrap());
+        // Reverse start order: rails, valkey, then the database.
+        children.reverse();
+        for (name, child) in children.iter_mut() {
+            match (*name, &plan) {
+                ("valkey", Some(p)) => {
+                    let _ = valkey_shutdown(p.secrets.valkey_port, &p.secrets.valkey_password);
+                }
+                _ => terminate(child),
+            }
+            if !wait_exit(child, Duration::from_secs(15)) {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        let mut postgres_started = self.postgres_started.lock().unwrap();
+        if let (true, Some(p)) = (*postgres_started, &plan) {
+            let _ = pg_ctl_stop(&p.runtime, &p.data);
+            *postgres_started = false;
+        }
+    }
+
+    /// Whether every service started so far is still running.
+    pub fn all_running(&self) -> bool {
+        self.children.lock().unwrap().iter_mut().all(|(_, c)| matches!(c.try_wait(), Ok(None)))
+    }
+
+    fn remember(&self, name: &'static str, child: Child) {
+        self.children.lock().unwrap().push((name, child));
+    }
+
+    fn wait_for_port(&self, name: &str, port: u16, timeout: Duration) -> Result<(), String> {
+        let addr: SocketAddr = ([127, 0, 0, 1], port).into();
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
+                return Ok(());
+            }
+            self.ensure_running(name)?;
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        Err(format!("{name} did not start within {}s.", timeout.as_secs()))
+    }
+
+    fn wait_for_http(&self, url: &str, timeout: Duration) -> Result<(), String> {
+        let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(5)).redirects(0).build();
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if let Ok(resp) = agent.get(url).call() {
+                if resp.status() == 200 {
+                    return Ok(());
+                }
+            }
+            self.ensure_running("rails")?;
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        Err(format!("Sure did not respond within {}s.", timeout.as_secs()))
+    }
+
+    /// Fail fast when a service exited during startup instead of waiting out the timeout.
+    fn ensure_running(&self, name: &str) -> Result<(), String> {
+        let mut children = self.children.lock().unwrap();
+        if let Some((_, child)) = children.iter_mut().find(|(n, _)| *n == name) {
+            if let Ok(Some(status)) = child.try_wait() {
+                return Err(format!("{name} exited during startup ({status})."));
+            }
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -605,46 +681,6 @@ fn stop_stale(rt: &Runtime, data: &DataDir) {
         }
         let _ = fs::remove_file(&puma_pid);
     }
-}
-
-fn wait_for_port(app: &AppHandle, name: &str, port: u16, timeout: Duration) -> Result<(), String> {
-    let addr: SocketAddr = ([127, 0, 0, 1], port).into();
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(300)).is_ok() {
-            return Ok(());
-        }
-        ensure_running(app, name)?;
-        std::thread::sleep(Duration::from_millis(200));
-    }
-    Err(format!("{name} did not start within {}s.", timeout.as_secs()))
-}
-
-fn wait_for_http(app: &AppHandle, url: &str, timeout: Duration) -> Result<(), String> {
-    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(5)).redirects(0).build();
-    let start = Instant::now();
-    while start.elapsed() < timeout {
-        if let Ok(resp) = agent.get(url).call() {
-            if resp.status() == 200 {
-                return Ok(());
-            }
-        }
-        ensure_running(app, "rails")?;
-        std::thread::sleep(Duration::from_millis(500));
-    }
-    Err(format!("Sure did not respond within {}s.", timeout.as_secs()))
-}
-
-/// Fail fast when a service exited during startup instead of waiting out the timeout.
-fn ensure_running(app: &AppHandle, name: &str) -> Result<(), String> {
-    let backend = app.state::<LocalBackend>();
-    let mut children = backend.children.lock().unwrap();
-    if let Some((_, child)) = children.iter_mut().find(|(n, _)| *n == name) {
-        if let Ok(Some(status)) = child.try_wait() {
-            return Err(format!("{name} exited during startup ({status})."));
-        }
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
