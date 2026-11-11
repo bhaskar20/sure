@@ -117,11 +117,19 @@ xattr -cr /Applications/Sure.app
 ```
 Signing + notarization (below) removes this friction entirely.
 
-## Rust tests
+## Tests
 ```bash
 cd desktop/src-tauri
-cargo test
+cargo test                      # unit + integration tests (launcher, servers, windows)
+# End-to-end smoke test of a built runtime: boots it with the app's launcher
+# code, signs up, restarts and signs in (CI runs this before packaging).
+SURE_RUNTIME_DIR=$PWD/../runtime cargo test --test packaged_runtime_test -- --nocapture
 ```
+The Rails suite (`bin/rails test`) also runs on the bundled runtime: install the
+test gems with `runtime/ruby/bin/bundle`, point `DB_*`/`REDIS_URL` at a running
+local install (see `scripts/local-rails.sh` for the variables), and invoke
+`ruby bin/rails test` (not `bin/rails`: on macOS the `/usr/bin/env` shebang
+drops the `DYLD_*` variable that locates the bundled libvips).
 
 ## Reports and downloads
 

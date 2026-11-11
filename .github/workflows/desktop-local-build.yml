@@ -47,7 +47,15 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: desktop
-        run: npm ci
+        run: npm ci && npm run build
+
+      # Boots the bundled runtime with the app's own launcher code: first
+      # launch, sign-up, restart, sign-in. Fails the build before packaging.
+      - name: Smoke-test the bundled runtime
+        working-directory: desktop/src-tauri
+        env:
+          SURE_RUNTIME_DIR: ${{ github.workspace }}/desktop/runtime
+        run: cargo test --locked --test packaged_runtime_test -- --nocapture
 
       - name: Build DMG
         working-directory: desktop
@@ -104,7 +112,13 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: desktop
-        run: npm ci
+        run: npm ci && npm run build
+
+      - name: Smoke-test the bundled runtime
+        working-directory: desktop/src-tauri
+        env:
+          SURE_RUNTIME_DIR: ${{ github.workspace }}\desktop\runtime
+        run: cargo test --locked --test packaged_runtime_test -- --nocapture
 
       - name: Build installer
         working-directory: desktop
