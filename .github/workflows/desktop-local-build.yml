@@ -75,18 +75,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: msys2/setup-msys2@v2 # pin to a commit SHA before release
-        with:
-          location: C:\
-          msystem: MSYS
-          update: true
-          install: >-
-            gcc make pkgconf
-            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make
-            mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-libyaml
+      # The runner image ships MSYS2 at C:\msys64, which is also where
+      # RubyInstaller looks for its toolchain when compiling native gems.
+      - name: Install MSYS2 toolchains
+        shell: pwsh
+        run: |
+          C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed --noconfirm gcc make pkgconf mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make mingw-w64-ucrt-x86_64-pkgconf mingw-w64-ucrt-x86_64-libyaml"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build Valkey
-        shell: msys2 {0}
+        shell: C:\msys64\usr\bin\bash.exe --login -eo pipefail {0}
+        env:
+          MSYSTEM: MSYS
+          CHERE_INVOKING: "1"
         run: desktop/scripts/build-valkey-msys2.sh
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
