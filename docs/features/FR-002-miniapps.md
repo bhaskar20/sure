@@ -356,6 +356,9 @@ None.
   explicit "replace" and resets the write policy to `confirm`; the confirmation dialog lists the
   resolved arguments of the write (`-32005` `data.details`); Approve is inert for 800 ms with
   focus on decline; dev-server apps warn that Sure cannot limit their network access.
+- 2026-11-11: UAT run as product manager and end user with three test-instrument apps and
+  three product apps (Piggy Bank, Goal Planner, Benchmark Compare). Accepted for preview;
+  six defects fixed. Report: [FR-002-miniapps-uat.md](FR-002-miniapps-uat.md).
 
 ## Handoff
 
@@ -366,7 +369,8 @@ installed app" (and never across bundle/dev-server); `-32005` gains `data.detail
 adds `sandbox allow-scripts allow-forms allow-popups`.
 
 Left to do:
-- Exercise the real `postMessage` round trip in a browser (SDK ↔ host ↔ bridge) with
-  `examples/miniapps/recategorizer`, in the web app and in Sure Desktop; add a system test.
+- Run the UAT apps in Sure Desktop; add a system test for the `postMessage` round trip (the web
+  round trip passed UAT in Chrome).
+- UAT follow-ups listed in [FR-002-miniapps-uat.md](FR-002-miniapps-uat.md#follow-ups).
 - Deferred PRs on this branch: granular scopes for API keys/OAuth, an app-wide CSP.
 - Then the pre-PR checklist and a PR.

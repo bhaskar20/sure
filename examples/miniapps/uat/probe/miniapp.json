@@ -1,0 +1,12 @@
+{
+  "id": "uat-probe",
+  "name": "UAT probe",
+  "version": "1.0.0",
+  "description": "UAT instrument: checks the bridge, tool grants, confirmations, storage, resizing and data-changed events.",
+  "entry": "index.html",
+  "icon": "flask-conical",
+  "permissions": ["transactions:read", "categories:read", "categories:write"],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure UAT"
+}

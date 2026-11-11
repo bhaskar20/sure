@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Goal Planner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Goal Planner</h1>
+        <p class="muted">Plan life goals, see what each needs every month and whether you are on track.</p>
+        <p id="status" class="muted" role="status">Connecting to Sure…</p>
+        <p id="missing" class="notice" hidden></p>
+      </header>
+
+      <section id="summary" class="cards" aria-label="Summary"></section>
+      <p id="surplus-warning" class="notice warn" hidden></p>
+
+      <section>
+        <div class="section-head">
+          <h2>Goals</h2>
+          <button type="button" id="add-goal">Add a goal</button>
+        </div>
+        <form id="goal-form" class="panel" hidden>
+          <h3 id="goal-form-title">New goal</h3>
+          <div class="grid">
+            <label>Kind
+              <select id="goal-kind">
+                <option value="emergency">Emergency fund</option>
+                <option value="house">House deposit</option>
+                <option value="education">Child's education</option>
+                <option value="retirement">Retirement</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Name <input type="text" id="goal-name" maxlength="120" required></label>
+            <label><span id="goal-amount-label">Target amount</span>
+              <input type="number" id="goal-amount" min="1" step="any" required>
+            </label>
+            <label>Target date <input type="date" id="goal-date" required></label>
+            <label>Priority
+              <select id="goal-priority">
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label>Risk profile
+              <select id="goal-risk">
+                <option value="conservative">Conservative</option>
+                <option value="balanced">Balanced</option>
+                <option value="growth">Growth</option>
+              </select>
+            </label>
+            <label>I already put in each month (optional)
+              <input type="number" id="goal-contribution" min="0" step="any" placeholder="Share of surplus">
+            </label>
+          </div>
+          <div class="actions">
+            <button type="submit">Save goal</button>
+            <button type="button" id="goal-cancel" class="secondary">Cancel</button>
+          </div>
+        </form>
+        <div id="goals"></div>
+        <p id="no-goals" class="muted" hidden>No goals yet. Add one to start planning.</p>
+      </section>
+
+      <section id="priority-section" hidden>
+        <h2>Priorities and monthly surplus</h2>
+        <p class="muted">Your surplus is shared out by priority, then by target date. Goals with their own monthly figure use that.</p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Goal</th>
+              <th scope="col">Priority</th>
+              <th scope="col" class="num">Needs / month</th>
+              <th scope="col" class="num">Assigned</th>
+              <th scope="col" class="num">Running total</th>
+              <th scope="col">Fits surplus</th>
+            </tr>
+          </thead>
+          <tbody id="priorities"></tbody>
+        </table>
+      </section>
+
+      <section id="accounts-section" hidden>
+        <h2>Accounts you can earmark</h2>
+        <p id="accounts-note" class="muted"></p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Account</th>
+              <th scope="col">Type</th>
+              <th scope="col" class="num">Balance</th>
+              <th scope="col" class="num">Earmarked</th>
+              <th scope="col" class="num">Free</th>
+            </tr>
+          </thead>
+          <tbody id="accounts"></tbody>
+        </table>
+        <div id="holdings"></div>
+      </section>
+
+      <section>
+        <details id="assumptions-panel" class="panel">
+          <summary>Assumptions</summary>
+          <form id="assumptions-form">
+            <p class="muted">Expected yearly returns before inflation. Short horizons (under 3 years) use conservative and medium ones (3–7 years) at most balanced, whatever profile the goal picks.</p>
+            <div class="grid">
+              <label>Conservative return (%) <input type="number" id="ret-conservative" step="0.1" min="-50" max="50"></label>
+              <label>Balanced return (%) <input type="number" id="ret-balanced" step="0.1" min="-50" max="50"></label>
+              <label>Growth return (%) <input type="number" id="ret-growth" step="0.1" min="-50" max="50"></label>
+              <label>Inflation (%) <input type="number" id="inflation" step="0.1" min="-20" max="50"></label>
+              <label>Yearly rise in contributions (%) <input type="number" id="contribution-growth" step="0.1" min="-20" max="50"></label>
+            </div>
+            <label class="check"><input type="checkbox" id="todays-money"> Targets are in today's money (inflate them to the target date)</label>
+            <div class="actions">
+              <button type="submit">Save assumptions</button>
+              <button type="button" id="assumptions-reset" class="secondary">Reset to defaults</button>
+            </div>
+          </form>
+          <table class="mixes">
+            <thead><tr><th scope="col">Profile</th><th scope="col" class="num">Equity</th><th scope="col" class="num">Bonds</th><th scope="col" class="num">Cash</th></tr></thead>
+            <tbody id="mixes"></tbody>
+          </table>
+          <p class="muted small">Projections are estimates, not advice. Returns vary and are not guaranteed.</p>
+        </details>
+      </section>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="planner.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

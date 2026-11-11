@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Piggy Bank</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="app">
+      <p id="toast" class="toast" role="status" aria-live="polite" hidden></p>
+
+      <!-- Loading / not inside Sure -->
+      <section id="screen-loading" class="screen">
+        <div class="pig-emoji" aria-hidden="true">🐷</div>
+        <p id="loading-text" class="big-text">Waking up the piggy…</p>
+      </section>
+
+      <!-- Home: the child's main screen -->
+      <section id="screen-home" class="screen" hidden>
+        <header class="topbar">
+          <h1>My Piggy Bank</h1>
+          <button type="button" id="grownup-hold" class="hold-button" aria-label="Grown-ups: press and hold for 2 seconds">
+            <span class="hold-fill" aria-hidden="true"></span>
+            <span class="hold-label">🔒 Grown-up</span>
+          </button>
+        </header>
+        <p class="hold-hint" id="hold-hint" hidden>Keep holding…</p>
+
+        <button type="button" id="goal-card" class="goal-card">
+          <span id="goal-emoji" class="goal-emoji" aria-hidden="true">⭐</span>
+          <span class="goal-text">
+            <span id="goal-title" class="goal-title">Pick a goal!</span>
+            <span class="progress" aria-hidden="true"><span id="goal-progress" class="progress-bar"></span></span>
+            <span id="goal-left" class="goal-left">Tap here</span>
+          </span>
+        </button>
+
+        <div class="pig-stage">
+          <div id="coin-drop" class="coin-drop" aria-hidden="true"></div>
+          <svg id="pig" class="pig" viewBox="0 0 240 200" role="img" aria-labelledby="pig-label">
+            <title id="pig-label">Piggy bank</title>
+            <defs>
+              <clipPath id="pig-body-clip">
+                <ellipse cx="120" cy="112" rx="92" ry="70" />
+              </clipPath>
+            </defs>
+            <rect x="52" y="160" width="26" height="34" rx="10" class="pig-leg" />
+            <rect x="162" y="160" width="26" height="34" rx="10" class="pig-leg" />
+            <path d="M58 58 L70 18 L96 50 Z" class="pig-ear" />
+            <path d="M150 50 L176 18 L184 60 Z" class="pig-ear" />
+            <path d="M212 104 q22 -8 14 10 q-8 14 6 12" class="pig-tail" />
+            <ellipse cx="120" cy="112" rx="92" ry="70" class="pig-body" />
+            <g clip-path="url(#pig-body-clip)">
+              <rect id="pig-fill" x="20" y="40" width="200" height="145" class="pig-fill" />
+            </g>
+            <ellipse cx="120" cy="112" rx="92" ry="70" class="pig-outline" />
+            <rect x="100" y="44" width="40" height="8" rx="4" class="pig-slot" />
+            <circle cx="70" cy="96" r="7" class="pig-eye" />
+            <circle cx="104" cy="92" r="7" class="pig-eye" />
+            <ellipse cx="54" cy="124" rx="24" ry="18" class="pig-snout" />
+            <circle cx="47" cy="124" r="4" class="pig-nostril" />
+            <circle cx="61" cy="124" r="4" class="pig-nostril" />
+            <path id="pig-mouth" d="M78 146 q12 10 24 0" class="pig-mouth" />
+          </svg>
+        </div>
+
+        <p class="total">
+          <span id="total-figure" class="total-figure">0</span>
+        </p>
+        <div id="total-coins" class="coin-row" aria-hidden="true"></div>
+
+        <h2 class="section-title">Add a coin</h2>
+        <div class="coin-buttons" id="add-coins"></div>
+
+        <button type="button" id="spend-button" class="big-button spend">🛍️ Spend</button>
+
+        <p id="bonus-banner" class="bonus-banner" hidden></p>
+
+        <h2 class="section-title">My drops</h2>
+        <ol id="history" class="history"></ol>
+        <p id="history-empty" class="muted center">No coins yet. Add one!</p>
+      </section>
+
+      <!-- Goal picker -->
+      <section id="screen-goal" class="screen" hidden>
+        <h1>What do you want?</h1>
+        <div id="goal-emojis" class="emoji-grid" role="radiogroup" aria-label="Goal picture"></div>
+        <label class="field">
+          <span>Name</span>
+          <input type="text" id="goal-name" maxlength="24" autocomplete="off">
+        </label>
+        <p class="field-label">It costs</p>
+        <div class="stepper">
+          <button type="button" class="step" data-step="-10">−10</button>
+          <button type="button" class="step" data-step="-1">−1</button>
+          <output id="goal-price" class="step-value">20</output>
+          <button type="button" class="step" data-step="1">+1</button>
+          <button type="button" class="step" data-step="10">+10</button>
+        </div>
+        <div id="goal-price-coins" class="coin-row" aria-hidden="true"></div>
+        <div class="row">
+          <button type="button" id="goal-cancel" class="big-button plain">Back</button>
+          <button type="button" id="goal-save" class="big-button add">⭐ Save</button>
+        </div>
+      </section>
+
+      <!-- Spend: amount, then need or want, then a gentle check -->
+      <section id="screen-spend" class="screen" hidden>
+        <div id="spend-amount-step" class="step-panel">
+          <h1>How much?</h1>
+          <p class="big-text"><span id="spend-figure">0</span></p>
+          <div id="spend-coins" class="coin-row" aria-hidden="true"></div>
+          <div class="coin-buttons" id="spend-coin-buttons"></div>
+          <div class="row">
+            <button type="button" id="spend-clear" class="big-button plain">↩️ Again</button>
+            <button type="button" id="spend-next" class="big-button spend" disabled>Next ➡️</button>
+          </div>
+          <button type="button" id="spend-cancel" class="link-button">Never mind</button>
+        </div>
+
+        <div id="spend-kind-step" class="step-panel" hidden>
+          <h1>Is it a need or a want?</h1>
+          <div class="choice-grid">
+            <button type="button" id="spend-need" class="choice need">
+              <span class="choice-emoji" aria-hidden="true">🍎</span>
+              <span>I <strong>need</strong> it</span>
+              <span class="choice-hint">Like food or shoes</span>
+            </button>
+            <button type="button" id="spend-want" class="choice want">
+              <span class="choice-emoji" aria-hidden="true">🎈</span>
+              <span>I <strong>want</strong> it</span>
+              <span class="choice-hint">Like a toy or a treat</span>
+            </button>
+          </div>
+          <button type="button" id="spend-kind-back" class="link-button">Back</button>
+        </div>
+
+        <div id="spend-check-step" class="step-panel" hidden>
+          <div class="pig-emoji" aria-hidden="true" id="spend-check-emoji">🤔</div>
+          <h1 id="spend-check-title">Are you sure?</h1>
+          <p id="spend-check-text" class="big-text"></p>
+          <div class="row">
+            <button type="button" id="spend-keep" class="big-button add">🐷 Keep saving</button>
+            <button type="button" id="spend-confirm" class="big-button spend">🛍️ Spend</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Goal reached -->
+      <section id="screen-celebrate" class="screen celebrate" hidden>
+        <div id="confetti" class="confetti" aria-hidden="true"></div>
+        <div id="celebrate-emoji" class="celebrate-emoji" aria-hidden="true">🚲</div>
+        <h1>You did it!</h1>
+        <p id="celebrate-text" class="big-text"></p>
+        <p class="muted center">You waited and saved. That is a super power! 💪</p>
+        <div class="row">
+          <button type="button" id="celebrate-buy" class="big-button spend">🛍️ Buy it</button>
+          <button type="button" id="celebrate-keep" class="big-button add">🐷 Keep saving</button>
+        </div>
+      </section>
+
+      <!-- Bonus explained to the child -->
+      <section id="screen-bonus" class="screen celebrate" hidden>
+        <div class="celebrate-emoji" aria-hidden="true">🌱</div>
+        <h1>Your money grew!</h1>
+        <p id="bonus-text" class="big-text"></p>
+        <div id="bonus-coins" class="coin-row" aria-hidden="true"></div>
+        <p class="muted center">Saved money gets a bonus. Spent money does not.</p>
+        <button type="button" id="bonus-ok" class="big-button add">Yay! 🎉</button>
+      </section>
+
+      <!-- Grown-up check -->
+      <section id="screen-gate" class="screen" hidden>
+        <h1>Grown-ups only</h1>
+        <p class="muted">Answer to open the grown-up settings.</p>
+        <form id="gate-form" class="gate-form">
+          <label for="gate-answer" id="gate-question" class="big-text"></label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="gate-answer" autocomplete="off" maxlength="4" required>
+          <p id="gate-error" class="error" hidden>Not quite. Try again.</p>
+          <div class="row">
+            <button type="button" id="gate-cancel" class="big-button plain">Back</button>
+            <button type="submit" class="big-button add">Open</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Grown-up settings -->
+      <section id="screen-parent" class="screen parent" hidden>
+        <header class="topbar">
+          <h1>Grown-up settings</h1>
+          <button type="button" id="parent-done" class="big-button plain small">Done</button>
+        </header>
+
+        <p id="parent-missing" class="notice" hidden></p>
+
+        <div class="card">
+          <h2>Weekly bonus</h2>
+          <p class="muted">Once a week you can add a bonus on what your child kept saving. It shows how money grows when you leave it alone.</p>
+          <div class="segmented" id="bonus-percent" role="radiogroup" aria-label="Bonus percent"></div>
+          <p id="bonus-status" class="muted"></p>
+          <button type="button" id="bonus-give" class="big-button add small">Give bonus</button>
+        </div>
+
+        <div class="card" id="mirror-card">
+          <h2>Real money in Sure</h2>
+          <p class="muted">Pick the account where the piggy bank's real money lives. The piggy bank keeps its own coins here in this app; nothing changes in Sure until you record it below.</p>
+          <label class="field" id="account-field">
+            <span>Account</span>
+            <select id="account-select"></select>
+          </label>
+          <p id="account-balance" class="muted"></p>
+          <p id="account-empty" class="muted" hidden></p>
+
+          <div id="record-block">
+            <p id="record-status"></p>
+            <p id="record-policy" class="notice"></p>
+            <button type="button" id="record-button" class="big-button add small">Record in Sure</button>
+            <p id="record-last" class="muted"></p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Goal and sound</h2>
+          <div class="row wrap">
+            <button type="button" id="parent-goal" class="big-button plain small">Change goal</button>
+            <button type="button" id="sound-toggle" class="big-button plain small">Sound: on</button>
+          </div>
+        </div>
+
+        <div class="card danger-zone">
+          <h2>Start over</h2>
+          <p class="muted">Empties the piggy bank in this app and clears its history. Nothing is deleted in Sure.</p>
+          <button type="button" id="reset-button" class="big-button danger small">Empty the piggy bank</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+	"id": "goal-planner",
+	"name": "Goal Planner",
+	"version": "1.0.0",
+	"description": "Plan life goals such as an emergency fund, a house deposit, education or retirement. Works out the monthly saving each goal needs at an inflation-adjusted assumed return, earmarks accounts, checks the plan against your monthly surplus and can track a goal in Sure.",
+	"entry": "index.html",
+	"icon": "target",
+	"permissions": ["accounts:read", "reports:read", "goals:write"],
+	"slots": ["page"],
+	"network": [],
+	"author": "Sure"
+}

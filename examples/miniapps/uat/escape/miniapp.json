@@ -1,0 +1,12 @@
+{
+  "id": "uat-escape",
+  "name": "UAT escape",
+  "version": "1.0.0",
+  "description": "UAT instrument: tries to escape the sandbox. Every check passes when the attempt is blocked.",
+  "entry": "index.html",
+  "icon": "shield",
+  "permissions": [],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure UAT"
+}

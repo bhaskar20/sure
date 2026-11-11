@@ -1,0 +1,12 @@
+{
+  "id": "uat-network",
+  "name": "UAT network",
+  "version": "1.0.0",
+  "description": "UAT instrument: checks that only the declared network origin is reachable.",
+  "entry": "index.html",
+  "icon": "globe",
+  "permissions": [],
+  "slots": ["page"],
+  "network": ["https://api.github.com"],
+  "author": "Sure UAT"
+}
