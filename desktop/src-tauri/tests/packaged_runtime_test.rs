@@ -74,6 +74,22 @@ fn authenticity_token(html: &str) -> String {
     html[start..end].replace("&#x2F;", "/").replace("&amp;", "&")
 }
 
+/// Print every service log (and Valkey's generated config) after a failed boot.
+fn dump_logs(data: &DataDir) {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(data.logs())
+        .map(|d| d.filter_map(|e| e.ok().map(|e| e.path())).collect())
+        .unwrap_or_default();
+    files.push(data.valkey().join("valkey.conf"));
+    for f in files {
+        let text = std::fs::read_to_string(&f).unwrap_or_else(|e| format!("<unreadable: {e}>"));
+        let tail: Vec<&str> = text.lines().rev().take(40).collect();
+        eprintln!("----- {} -----", f.display());
+        for line in tail.into_iter().rev() {
+            eprintln!("{line}");
+        }
+    }
+}
+
 fn port_of(url: &str) -> u16 {
     url.rsplit(':').next().unwrap().parse().unwrap()
 }
@@ -97,6 +113,7 @@ fn packaged_runtime_boots_signs_up_restarts_and_signs_in() {
     let backend = LocalBackend::default();
     let url = backend.boot(&rt, &data).unwrap_or_else(|e| {
         backend.stop();
+        dump_logs(&data);
         panic!("first boot failed: {e}");
     });
     assert!(backend.all_running());
