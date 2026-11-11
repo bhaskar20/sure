@@ -367,10 +367,13 @@ None.
   six defects fixed. Report: [FR-002-miniapps-uat.md](FR-002-miniapps-uat.md).
 - 2026-11-11: AI for mini apps (`ai:use`); verified end to end in Sure Desktop against the
   bundled llama-server with Qwen3 4B. Goal Planner gained "Explain my plan".
+- 2026-11-11: Merged into `main` and pushed, together with the Sure Desktop work it was built
+  on (`desktop-local-app`).
 
 ## Handoff
 
-Built on `feature/FR-002-miniapps`; not pushed and no PR yet.
+Built on `feature/FR-002-miniapps` and merged into `main`. Status stays `In progress` until the
+open acceptance criteria (Sure Desktop, developer guide) are verified.
 
 Contract deviations: installs only upgrade an existing app id when the admin ticks "Replace the
 installed app" (and never across bundle/dev-server); `-32005` gains `data.details`; the frame CSP
