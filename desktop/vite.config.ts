@@ -9,7 +9,8 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   clearScreen: false,
   server: {
-    port: 1420,
+    // scripts/dev-local.sh picks a free port so several checkouts can run dev apps.
+    port: Number(process.env.SURE_DEV_PORT ?? 1420),
     strictPort: true,
     // The bundled runtime and native build folders hold thousands of files
     // (gems, PostgreSQL, Rust output) that are not part of this frontend.

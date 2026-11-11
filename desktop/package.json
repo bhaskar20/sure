@@ -9,7 +9,7 @@
     "tauri": "tauri",
     "runtime:mac": "scripts/build-runtime-macos.sh",
     "runtime:app": "scripts/build-runtime-macos.sh --app-only",
-    "dev:local": "SURE_RUNTIME_DIR=\"$PWD/runtime\" tauri dev",
+    "dev:local": "scripts/dev-local.sh",
     "build:mac": "tauri build --config src-tauri/tauri.local.conf.json",
     "build:app": "tauri build --config src-tauri/tauri.local.conf.json --bundles app",
     "test:rust": "cd src-tauri && cargo test",

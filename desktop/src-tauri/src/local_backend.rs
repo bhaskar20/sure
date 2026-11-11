@@ -207,17 +207,15 @@ pub fn start(app: &AppHandle) {
         backend.set_status(Status::NotBundled);
         return;
     };
-    // Development builds keep separate data, so a `tauri dev` session never
-    // stops (as stale) the services of an installed Sure that is running.
-    let data_folder = if cfg!(debug_assertions) { "local-dev" } else { "local" };
     let data_root = match app.path().app_local_data_dir() {
-        Ok(d) => d.join(data_folder),
+        Ok(d) => d.join(data_folder()),
         Err(e) => {
             backend.set_status(Status::Failed { message: e.to_string(), logs: String::new() });
             return;
         }
     };
     let data = DataDir::new(data_root);
+    record_dev_data_dir(&data);
     backend.set_status(Status::Starting { step: "Preparing".into() });
     let ai = crate::local_ai::LocalAi::new(Some(runtime.llama_server()), data.root.clone())
         .map_err(|e| eprintln!("[sure] local AI unavailable: {e}"))
@@ -241,6 +239,32 @@ pub fn start(app: &AppHandle) {
             }
         }
     });
+}
+
+/// The data folder name. Development builds keep separate data per checkout
+/// (`local-dev-<hash of the build folder>`), so a `tauri dev` session never
+/// stops, as stale, the services of an installed Sure or of another checkout's
+/// dev app. The chosen path is written to `desktop/.dev-data-dir` for the
+/// dev scripts (local-rails.sh --dev).
+fn data_folder() -> String {
+    if !cfg!(debug_assertions) {
+        return "local".into();
+    }
+    use sha2::{Digest, Sha256};
+    let build_dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.display().to_string()))
+        .unwrap_or_default();
+    let hash = Sha256::digest(build_dir.as_bytes());
+    format!("local-dev-{}", hash[..4].iter().map(|b| format!("{b:02x}")).collect::<String>())
+}
+
+/// Record a dev build's data folder in its checkout for the dev scripts.
+fn record_dev_data_dir(data: &DataDir) {
+    if cfg!(debug_assertions) {
+        let marker = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.dev-data-dir");
+        let _ = fs::write(marker, data.root.display().to_string());
+    }
 }
 
 /// Stop the local services with the app.

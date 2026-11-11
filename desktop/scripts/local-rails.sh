@@ -9,7 +9,7 @@
 #   desktop/scripts/local-rails.sh --dev desktop:dev_seed  # seed `npm run dev:local`
 #
 # SURE_APP (default /Applications/Sure.app) picks the installed app to use.
-# --dev targets the dev app instead: its data (local-dev/) and desktop/runtime/.
+# --dev targets this checkout's dev app instead: its data folder and desktop/runtime/.
 set -euo pipefail
 
 APP="${SURE_APP:-/Applications/Sure.app}"
@@ -18,7 +18,10 @@ DATA="$HOME/Library/Application Support/app.sure.desktop/local"
 if [ "${1:-}" = "--dev" ]; then
   shift
   RT="${SURE_RUNTIME_DIR:-$(cd "$(dirname "$0")/.." && pwd)/runtime}"
-  DATA="$HOME/Library/Application Support/app.sure.desktop/local-dev"
+  # The dev app records its (per-checkout) data folder here on launch.
+  MARKER="$(cd "$(dirname "$0")/.." && pwd)/.dev-data-dir"
+  [ -f "$MARKER" ] || { echo "Start the dev app once (npm run dev:local) so it records its data folder." >&2; exit 1; }
+  DATA="$(cat "$MARKER")"
   export SURE_DESKTOP_DEV=1
 fi
 [ -x "$RT/ruby/bin/ruby" ] || { echo "No bundled runtime in $RT (set SURE_APP, or build one with npm run runtime:mac)" >&2; exit 1; }
