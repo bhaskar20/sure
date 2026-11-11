@@ -90,9 +90,48 @@ $("server-form").addEventListener("submit", (e) => {
   if (url) connect(url);
 });
 
+type LocalStatus =
+  | { state: "not_bundled" }
+  | { state: "starting"; step: string }
+  | { state: "ready"; url: string }
+  | { state: "failed"; message: string; logs: string };
+
+// Packaged builds run Sure on this computer: show progress until the local
+// server answers, then open it. Returns false when this build has no bundled
+// server, so the remote-server picker is used instead.
+async function bootLocal(): Promise<boolean> {
+  let status: LocalStatus;
+  try {
+    status = await invoke<LocalStatus>("local_backend_status");
+  } catch {
+    return false;
+  }
+  if (status.state === "not_bundled") return false;
+
+  ($("logo") as HTMLImageElement).src = new URL("./assets/logomark.svg", import.meta.url).href;
+  $("server-form").classList.add("hidden");
+  $("remembered").classList.add("hidden");
+  const show = (s: LocalStatus) => {
+    if (s.state === "starting") {
+      $("title").textContent = S.localTitle;
+      setStatus(`${s.step}…`, "info");
+    } else if (s.state === "ready") {
+      goToServer(s.url);
+    } else if (s.state === "failed") {
+      $("title").textContent = S.localFailed;
+      setStatus(`${s.message}\n${S.localLogs} ${s.logs}`, "error");
+    }
+  };
+  // Subscribe before re-reading, so a transition between the two isn't missed.
+  await listen<LocalStatus>("local-backend-status", (e) => show(e.payload));
+  show(await invoke<LocalStatus>("local_backend_status"));
+  return true;
+}
+
 // On launch, resume straight to the last server if there is one; otherwise
 // show the picker.
 async function boot() {
+  if (await bootLocal()) return;
   let active: string | null = null;
   try {
     active = await invoke<string | null>("active_server");

@@ -42,7 +42,8 @@ end
 # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
 # The bind host is controlled via the Rails-native `BINDING` env var (set to
 # `0.0.0.0` in containers, or `::` for IPv6 dual-stack). See docs/hosting/docker.md.
-port ENV.fetch("PORT") { 3000 }
+# Sure Desktop binds loopback only (see the end of this file).
+port ENV.fetch("PORT") { 3000 } unless ENV["SURE_DESKTOP"] == "1"
 
 # Specifies the `environment` that Puma will run in.
 environment rails_env
@@ -56,4 +57,30 @@ if rails_env == "development"
   # Specifies a very generous `worker_timeout` so that the worker
   # isn't killed by Puma when suspended by a debugger.
   worker_timeout 3600
+end
+
+# Sure Desktop: the packaged app runs everything on this machine. Puma listens
+# on loopback only, and Sidekiq runs inside the Puma process (embedded mode), so
+# the desktop launcher supervises one Ruby process instead of a web + worker pair.
+if ENV["SURE_DESKTOP"] == "1"
+  bind "tcp://127.0.0.1:#{ENV.fetch("PORT") { 3000 }}"
+
+  desktop_sidekiq = nil
+  start_sidekiq = lambda do
+    # Mirrors config/sidekiq.yml, which embedded mode does not read.
+    desktop_sidekiq = Sidekiq.configure_embed do |config|
+      config.queues = %w[scheduled,10 high_priority,4 medium_priority,2 low_priority,1 default,1]
+      config.concurrency = Integer(ENV.fetch("SIDEKIQ_CONCURRENCY") { 2 })
+      config.capsule("ai") do |cap|
+        cap.concurrency = 1
+        cap.queues = %w[ai_high_priority ai_low_priority]
+      end
+    end
+    desktop_sidekiq.run
+  end
+  stop_sidekiq = -> { desktop_sidekiq&.stop }
+
+  # Puma 7 renamed on_booted/on_stopped; keep working on either name.
+  respond_to?(:after_booted) ? after_booted(&start_sidekiq) : on_booted(&start_sidekiq)
+  respond_to?(:after_stopped) ? after_stopped(&stop_sidekiq) : on_stopped(&stop_sidekiq)
 end

@@ -8,6 +8,9 @@ export const S = {
   invalidUrl: "That doesn't look like a valid address.",
   remembered: "Remembered servers",
   remove: "Remove",
+  localTitle: "Starting Sure",
+  localFailed: "Sure couldn't start",
+  localLogs: "Logs are in:",
 } as const;
 
 export const P = {

@@ -40,7 +40,8 @@ gem "sidekiq-cron"
 gem "sidekiq-unique-jobs"
 
 # Monitoring
-gem "vernier"
+# Native profiler without Windows support; Sure Desktop ships a Windows build.
+gem "vernier", platforms: :ruby
 gem "rack-mini-profiler"
 gem "sentry-ruby"
 gem "sentry-rails"
