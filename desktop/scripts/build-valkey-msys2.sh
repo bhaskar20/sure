@@ -32,31 +32,6 @@ ldd "$OUT/valkey-server.exe" | awk '$3 ~ /^\/usr\/bin\// { print $3 }' | sort -u
   cp "$dll" "$OUT/"
 done
 ls -la "$OUT"
-
-# Smoke test: the server must start and answer PING.
-set +e
-"$OUT/valkey-server.exe" --version
-echo "valkey --version exit status: $?"
-"$OUT/valkey-server.exe" --port 6390 --bind 127.0.0.1 --save "" --appendonly no &
-pid=$!
-reply=""
-for _ in $(seq 1 20); do
-  sleep 0.5
-  if exec 3<>/dev/tcp/127.0.0.1/6390 2>/dev/null; then
-    printf 'PING\r\n' >&3
-    read -t 3 -r reply <&3
-    exec 3>&-
-    break
-  fi
-done
-kill "$pid" 2>/dev/null
-echo "PING reply: $reply"
-if [[ "$reply" != +PONG* ]]; then
-  # Diagnose why the server does not start: full DLL tree and loader trace.
-  cygcheck "$OUT/valkey-server.exe" || true
-  (cd "$OUT" && ./valkey-server.exe --version; echo "run from its folder: exit $?")
-  strace -o "$WORK/strace.txt" "$OUT/valkey-server.exe" --version || true
-  tail -60 "$WORK/strace.txt" || true
-  exit 1
-fi
-set -e
+# No smoke test here: run from an MSYS2 shell, the bundled msys-2.0.dll clashes
+# with the shell's own copy and the server exits with status 127. The Windows
+# runtime builder tests it from PowerShell, the way the app launches it.

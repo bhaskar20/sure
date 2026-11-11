@@ -70,6 +70,27 @@ if (-not (Test-Path (Join-Path $valkeyBuild "valkey-server.exe"))) {
   throw "valkey-server.exe not found in $valkeyBuild - run build-valkey-msys2.sh first"
 }
 Copy-Item -Recurse $valkeyBuild (Join-Path $Out "valkey")
+# Smoke test from a plain Windows process (as the app runs it): start, PING, stop.
+$valkeyExe = Join-Path $Out "valkey\valkey-server.exe"
+$proc = Start-Process -FilePath $valkeyExe -ArgumentList "--port 6390 --bind 127.0.0.1 --save `"`" --appendonly no" -PassThru -WindowStyle Hidden
+$reply = ""
+foreach ($i in 1..20) {
+  Start-Sleep -Milliseconds 500
+  try {
+    $client = New-Object System.Net.Sockets.TcpClient("127.0.0.1", 6390)
+    $stream = $client.GetStream()
+    $bytes = [Text.Encoding]::ASCII.GetBytes("PING`r`n")
+    $stream.Write($bytes, 0, $bytes.Length)
+    $buf = New-Object byte[] 64
+    $n = $stream.Read($buf, 0, 64)
+    $reply = [Text.Encoding]::ASCII.GetString($buf, 0, $n)
+    $client.Close()
+    break
+  } catch { }
+}
+Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+Write-Host "Valkey PING reply: $reply"
+if (-not $reply.StartsWith("+PONG")) { throw "bundled valkey-server.exe does not start" }
 
 # --- CA certificates ----------------------------------------------------------
 New-Item -ItemType Directory -Force -Path (Join-Path $Out "ssl") | Out-Null
