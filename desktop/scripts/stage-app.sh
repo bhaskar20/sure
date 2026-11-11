@@ -23,8 +23,11 @@ echo "==> Copying app sources to $OUT"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 # Tracked and new (not ignored) files, minus everything that is not the web app.
+# docs/ is dropped except the parts the app reads at runtime (the in-app
+# onboarding guide and its images, and the API docs).
 (cd "$REPO" && git ls-files -co --exclude-standard) \
-  | grep -vE '^(desktop|mobile|test|spec|docs|charts|design|\.github|\.devcontainer|perf\.rake|compose\.|Dockerfile)' \
+  | grep -vE '^(desktop|mobile|test|spec|charts|design|\.github|\.devcontainer|perf\.rake|compose\.|Dockerfile)' \
+  | awk '!/^docs\// || /^docs\/(onboarding|api)\//' \
   | (cd "$REPO" && tar -cf - -T -) \
   | tar -xf - -C "$OUT"
 mkdir -p "$OUT/tmp" "$OUT/log" "$OUT/storage"
