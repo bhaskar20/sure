@@ -25,8 +25,11 @@ use std::time::{Duration, Instant};
 /// The model name Sure is configured with; llama-server answers to it
 /// whichever GGUF it has loaded.
 pub const MODEL_ALIAS: &str = "sure-local";
-pub const DEFAULT_CONTEXT: u32 = 8192;
-const MIN_CONTEXT: u32 = 2048;
+/// Sure's assistant sends its system prompt and tool definitions with every
+/// chat request (about 14K tokens), and a tool call's results push the next
+/// request past 16K, so smaller contexts can't serve it.
+pub const DEFAULT_CONTEXT: u32 = 32_768;
+pub const MIN_CONTEXT: u32 = 32_768;
 const MAX_CONTEXT: u32 = 131_072;
 
 /// A model offered in Preferences, pinned to an exact file and checksum.
@@ -59,7 +62,7 @@ pub const CATALOG: &[CatalogModel] = &[
         size: 2_497_281_120,
         sha256: "3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
         license: "Apache-2.0",
-        ram_gb: 5,
+        ram_gb: 7,
         recommended: true,
         server_args: &[],
     },
@@ -72,7 +75,7 @@ pub const CATALOG: &[CatalogModel] = &[
         size: 1_282_439_264,
         sha256: "d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5",
         license: "Apache-2.0",
-        ram_gb: 3,
+        ram_gb: 5,
         recommended: false,
         server_args: &["--reasoning-budget", "0"],
     },
@@ -85,7 +88,7 @@ pub const CATALOG: &[CatalogModel] = &[
         size: 2_019_377_696,
         sha256: "6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff",
         license: "Llama 3.2 Community License",
-        ram_gb: 4,
+        ram_gb: 6,
         recommended: false,
         server_args: &[],
     },
@@ -98,22 +101,9 @@ pub const CATALOG: &[CatalogModel] = &[
         size: 5_027_783_488,
         sha256: "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
         license: "Apache-2.0",
-        ram_gb: 8,
+        ram_gb: 11,
         recommended: false,
         server_args: &["--reasoning-budget", "0"],
-    },
-    CatalogModel {
-        id: "qwen2.5-0.5b-instruct",
-        name: "Qwen2.5 0.5B Instruct",
-        description: "Tiny; for low-end machines or trying the feature out.",
-        url: "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-        file: "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-        size: 491_400_032,
-        sha256: "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
-        license: "Apache-2.0",
-        ram_gb: 1,
-        recommended: false,
-        server_args: &[],
     },
 ];
 
@@ -390,6 +380,14 @@ impl LocalAi {
             "999".into(),
             "--parallel".into(),
             "1".into(),
+            // 8-bit KV cache: about half the memory of the default for the
+            // large contexts Sure needs, with negligible quality loss.
+            "--cache-type-k".into(),
+            "q8_0".into(),
+            "--cache-type-v".into(),
+            "q8_0".into(),
+            "--flash-attn".into(),
+            "on".into(),
             "--jinja".into(),
             "--no-webui".into(),
             "--offline".into(),

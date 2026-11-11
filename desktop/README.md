@@ -18,6 +18,8 @@ A packaged build bundles a `runtime/` resource folder:
 | `app/` | The Rails app: production gems vendored, assets precompiled |
 | `postgres/` | PostgreSQL server ([zonky embedded binaries](https://github.com/zonkyio/embedded-postgres-binaries)) |
 | `valkey/` | `valkey-server`, a BSD-licensed Redis-compatible server, for Sidekiq + cache |
+| `llama/` | llama.cpp's `llama-server` (Metal on Macs, Vulkan with CPU fallback on Windows) for local AI |
+| `libvips/` | libvips for image variants (avatars, logos, attachment previews) |
 | `ssl/` | CA bundle for outbound HTTPS (exchange rates, bank sync providers) |
 
 On launch, `src-tauri/src/local_backend.rs` starts PostgreSQL, Valkey and
@@ -58,6 +60,29 @@ cd desktop; npm ci; npx tauri build --config src-tauri/tauri.local.conf.json
 
 CI does both in `.github/workflows/desktop-local-build.yml` (manual run, or push
 a `desktop-v*` tag).
+
+### Local AI
+
+**Preferences → Local AI** runs an LLM on this computer for Sure's assistant
+and auto-categorization, so prompts never leave the machine:
+
+- Pick a model from a short catalog (Qwen3 4B Instruct is recommended; Qwen3
+  1.7B for older machines; Llama 3.2 3B; Qwen3 8B for 16 GB+ machines) or add
+  any GGUF by `https://` URL or file path. Catalog downloads are checked
+  against pinned sizes and SHA-256s; every model file must have a GGUF header.
+- Models live in `local/models/` in the data folder; nothing is bundled.
+- While on, `llama-server` serves the model on 127.0.0.1 with a generated API
+  key, and the launcher points Sure's OpenAI-compatible provider at it
+  (`OPENAI_URI_BASE`, `OPENAI_MODEL=sure-local`, a 32K `LLM_CONTEXT_WINDOW`,
+  longer timeouts, one AI thread). Turning it off restores whatever AI
+  provider is configured in Sure's own settings. Switching models restarts only
+  llama-server; turning local AI on/off or changing the context restarts Puma.
+- 32K context is the minimum: Sure's assistant prompt with its tool
+  definitions is about 14K tokens, and one tool call's results push the next
+  request past 16K. The KV cache is 8-bit to keep that affordable.
+- Measured on an M-series Mac: the 4B model answers a tool-using question in
+  about 40 s (most of it processing Sure's 14K-token prompt), and
+  categorizes a batch of transactions in about 30 s.
 
 ### Troubleshooting
 If startup fails, the window shows the error and the logs folder
@@ -124,6 +149,8 @@ cargo test                      # unit + integration tests (launcher, servers, w
 # End-to-end smoke test of a built runtime: boots it with the app's launcher
 # code, signs up, restarts and signs in (CI runs this before packaging).
 SURE_RUNTIME_DIR=$PWD/../runtime cargo test --test packaged_runtime_test -- --nocapture
+# Local AI end to end (downloads a model): checksum, server, API key, tool call.
+SURE_RUNTIME_DIR=$PWD/../runtime SURE_TEST_LOCAL_AI=1 cargo test --test local_ai_server_test -- --nocapture
 ```
 The Rails suite (`bin/rails test`) also runs on the bundled runtime: install the
 test gems with `runtime/ruby/bin/bundle`, point `DB_*`/`REDIS_URL` at a running

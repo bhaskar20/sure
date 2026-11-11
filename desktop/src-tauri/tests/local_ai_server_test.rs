@@ -2,7 +2,7 @@
 //! serves it with the bundled llama-server: checksum verification, API-key
 //! auth, and an OpenAI-style tool call like Sure's assistant makes.
 //!
-//! Needs a built runtime and a ~0.5 GB download, so it only runs on request:
+//! Needs a built runtime and a 1.3 GB download, so it only runs on request:
 //!
 //!   SURE_RUNTIME_DIR=$PWD/../runtime SURE_TEST_LOCAL_AI=1 \
 //!     cargo test --test local_ai_server_test -- --nocapture
