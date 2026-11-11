@@ -32,6 +32,33 @@ pub fn init(app: &AppHandle, ai: Option<LocalAi>) {
     *app.state::<AiHandle>().0.lock().unwrap() = Some(ai);
 }
 
+/// The local_ai_* commands, as ACL permissions (see build.rs).
+pub const COMMAND_PERMISSIONS: &[&str] = &[
+    "allow-local-ai-state",
+    "allow-local-ai-download",
+    "allow-local-ai-cancel-download",
+    "allow-local-ai-dismiss-error",
+    "allow-local-ai-select",
+    "allow-local-ai-set-enabled",
+    "allow-local-ai-set-context",
+    "allow-local-ai-delete",
+    "allow-local-ai-add-custom",
+];
+
+/// Let Sure's Settings → Local AI page, served by the local backend at
+/// `origin`, call the local AI commands. Remote Sure servers never get this.
+pub fn grant_capability(app: &AppHandle, origin: &str) {
+    let mut capability = tauri::ipc::CapabilityBuilder::new("local-sure-ai")
+        .window("main")
+        .remote(format!("{origin}/**"));
+    for permission in COMMAND_PERMISSIONS {
+        capability = capability.permission(*permission);
+    }
+    if let Err(e) = app.add_capability(capability) {
+        eprintln!("[sure] failed to grant local AI commands to {origin}: {e}");
+    }
+}
+
 /// Start llama-server once Sure is up, if local AI is on.
 pub fn start_server(app: &AppHandle) {
     if let Ok(ai) = app.state::<AiHandle>().get() {

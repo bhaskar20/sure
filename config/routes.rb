@@ -442,6 +442,7 @@ Rails.application.routes.draw do
       delete "tokens/:token_id", to: "mcp#revoke", as: :revoke_token
     end
     resource :ai_prompts, only: %i[show update]
+    resource :local_ai, only: :show
     resource :classifier, only: %i[show update] do
       patch :rule
       post :add_rule

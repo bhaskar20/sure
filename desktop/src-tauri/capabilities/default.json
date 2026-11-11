@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for the main window",
-  "windows": ["main", "prefs"],
+  "windows": [
+    "main",
+    "prefs"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -14,6 +17,25 @@
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
-    "deep-link:default"
+    "deep-link:default",
+    "allow-list-servers",
+    "allow-add-server",
+    "allow-remove-server",
+    "allow-check-server",
+    "allow-active-server",
+    "allow-set-active-server",
+    "allow-get-launch-at-login",
+    "allow-set-launch-at-login",
+    "allow-start-sso",
+    "allow-local-backend-status",
+    "allow-local-ai-state",
+    "allow-local-ai-download",
+    "allow-local-ai-cancel-download",
+    "allow-local-ai-dismiss-error",
+    "allow-local-ai-select",
+    "allow-local-ai-set-enabled",
+    "allow-local-ai-set-context",
+    "allow-local-ai-delete",
+    "allow-local-ai-add-custom"
   ]
 }

@@ -230,6 +230,7 @@ pub fn start(app: &AppHandle) {
             Ok(url) => {
                 *LOCAL_URL.lock().unwrap() = Some(url.clone());
                 crate::commands::grant_server_capability(&app, &url);
+                crate::local_ai_app::grant_capability(&app, &url);
                 backend.set_status(Status::Ready { url });
                 crate::local_ai_app::start_server(&app);
             }
@@ -321,7 +322,9 @@ impl LocalBackend {
         let rails_log = data.logs().join("rails.log");
         let extra = self.extra_env.lock().unwrap().clone();
         let mut prepare = rails_command(rt, data, &secrets, &extra, &rails_log)?;
-        prepare.arg("bin/rails").arg("db:prepare");
+        // --trace: on failure the log keeps the whole error chain (e.g. the
+        // PG::ConnectionBad behind Rails' generic connection message).
+        prepare.arg("bin/rails").args(["db:prepare", "--trace"]);
         let status = prepare.status().map_err(|e| format!("Could not run Ruby: {e}"))?;
         if !status.success() {
             return Err(format!("Database setup failed ({status}). {}", tail(&rails_log)));

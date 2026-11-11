@@ -1,0 +1,114 @@
+<%= content_for :page_title, t(".page_title") %>
+
+<%
+  strings = {
+    off: t(".status.off"),
+    no_model: t(".status.no_model"),
+    starting: t(".status.starting"),
+    running: t(".status.running"),
+    failed: t(".status.failed"),
+    downloading: t(".downloading"),
+    memory: t(".memory"),
+    folder: t(".folder"),
+    confirm_delete: t(".actions.confirm_delete")
+  }
+%>
+
+<div class="space-y-4"
+     data-controller="desktop-local-ai"
+     data-desktop-local-ai-strings-value="<%= strings.to_json %>">
+  <div data-desktop-local-ai-target="unavailable" class="hidden">
+    <%= render DS::Alert.new(message: t(".unavailable"), variant: :warning) %>
+  </div>
+
+  <div data-desktop-local-ai-target="panel" class="hidden space-y-4">
+    <%= settings_section title: t(".title"), subtitle: t(".subtitle") do %>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between gap-4">
+          <label for="local_ai_enabled" class="text-sm font-medium text-primary"><%= t(".enable") %></label>
+          <%= render DS::Toggle.new(id: "local_ai_enabled",
+                                    data: { desktop_local_ai_target: "enabled", action: "change->desktop-local-ai#toggle" }) %>
+        </div>
+        <p class="text-sm text-secondary" role="status" data-desktop-local-ai-target="status"></p>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <label for="local_ai_context" class="text-sm font-medium text-primary"><%= t(".context.label") %></label>
+            <p class="text-xs text-secondary"><%= t(".context.hint") %></p>
+          </div>
+          <div class="form-field w-fit">
+            <select id="local_ai_context" class="form-field__input"
+                    data-desktop-local-ai-target="context"
+                    data-action="change->desktop-local-ai#setContext">
+              <option value="32768"><%= t(".context.options.32k") %></option>
+              <option value="65536"><%= t(".context.options.64k") %></option>
+            </select>
+          </div>
+        </div>
+      </div>
+    <% end %>
+
+    <%= settings_section title: t(".models.title"), subtitle: t(".models.subtitle") do %>
+      <ul class="space-y-2" data-desktop-local-ai-target="models"></ul>
+      <p class="text-xs text-subdued mt-3" data-desktop-local-ai-target="folder"></p>
+    <% end %>
+
+    <%= settings_section title: t(".custom.title"), subtitle: t(".custom.subtitle") do %>
+      <%= styled_form_with scope: :local_ai_model, url: "#", class: "space-y-3",
+                           data: { action: "submit->desktop-local-ai#addCustom" } do |form| %>
+        <%= form.text_field :name, label: t(".custom.name"),
+                            data: { desktop_local_ai_target: "customName" } %>
+        <%= form.text_field :source, label: t(".custom.source"), placeholder: t(".custom.source_placeholder"),
+                            autocomplete: "off", spellcheck: false,
+                            data: { desktop_local_ai_target: "customSource" } %>
+        <%= render DS::Button.new(text: t(".custom.add"), type: "submit") %>
+      <% end %>
+    <% end %>
+
+    <p class="text-sm text-destructive hidden" role="alert" data-desktop-local-ai-target="message"></p>
+  </div>
+
+  <%# Cloned by the Stimulus controller for each model. %>
+  <template data-desktop-local-ai-target="modelTemplate">
+    <li class="bg-container-inset border border-transparent rounded-lg p-3 flex items-start justify-between gap-4" data-field="row">
+      <div class="min-w-0 flex-1 space-y-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <p class="text-sm font-medium text-primary" data-field="name"></p>
+          <span data-field="badge"></span>
+        </div>
+        <p class="text-xs text-secondary break-words" data-field="meta"></p>
+        <div class="hidden space-y-1" data-field="progress">
+          <div class="h-1 rounded-full bg-container overflow-hidden">
+            <div class="h-full bg-inverse" data-field="bar"></div>
+          </div>
+          <p class="text-xs text-secondary" data-field="progressText"></p>
+        </div>
+        <p class="hidden text-xs text-destructive" data-field="error"></p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0" data-field="actions"></div>
+    </li>
+  </template>
+  <template data-desktop-local-ai-target="recommendedBadge">
+    <%= render DS::Pill.new(label: t(".models.recommended"), tone: :success, size: :sm) %>
+  </template>
+  <template data-desktop-local-ai-target="customBadge">
+    <%= render DS::Pill.new(label: t(".models.custom"), tone: :neutral, size: :sm) %>
+  </template>
+  <template data-desktop-local-ai-target="downloadButton">
+    <%= render DS::Button.new(text: t(".actions.download"), size: :sm, data: { action: "desktop-local-ai#download" }) %>
+  </template>
+  <template data-desktop-local-ai-target="useButton">
+    <%= render DS::Button.new(text: t(".actions.use"), size: :sm, data: { action: "desktop-local-ai#select" }) %>
+  </template>
+  <template data-desktop-local-ai-target="inUseButton">
+    <%= render DS::Button.new(text: t(".actions.in_use"), size: :sm, variant: :outline, disabled: true) %>
+  </template>
+  <template data-desktop-local-ai-target="deleteButton">
+    <%= render DS::Button.new(text: t(".actions.delete"), size: :sm, variant: :outline_destructive, data: { action: "desktop-local-ai#remove" }) %>
+  </template>
+  <template data-desktop-local-ai-target="cancelButton">
+    <%= render DS::Button.new(text: t(".actions.cancel"), size: :sm, variant: :outline, data: { action: "desktop-local-ai#cancel" }) %>
+  </template>
+  <template data-desktop-local-ai-target="dismissButton">
+    <%= render DS::Button.new(text: t(".actions.dismiss"), size: :sm, variant: :outline, data: { action: "desktop-local-ai#dismiss" }) %>
+  </template>
+</div>
