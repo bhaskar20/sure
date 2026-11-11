@@ -50,6 +50,13 @@ for _ in $(seq 1 20); do
   fi
 done
 kill "$pid" 2>/dev/null
-set -e
 echo "PING reply: $reply"
-[[ "$reply" == +PONG* ]]
+if [[ "$reply" != +PONG* ]]; then
+  # Diagnose why the server does not start: full DLL tree and loader trace.
+  cygcheck "$OUT/valkey-server.exe" || true
+  (cd "$OUT" && ./valkey-server.exe --version; echo "run from its folder: exit $?")
+  strace -o "$WORK/strace.txt" "$OUT/valkey-server.exe" --version || true
+  tail -60 "$WORK/strace.txt" || true
+  exit 1
+fi
+set -e
