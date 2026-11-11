@@ -63,7 +63,7 @@ en:
         source_changed: "%{name} was installed from a different source. Uninstall it before installing it from a zip file or a dev server."
     dev_server:
       errors:
-        unavailable: Dev mode is only available on self-hosted and development installs.
+        unavailable: Dev mode is only available in Sure Desktop and development installs.
         not_loopback: Dev mode URLs must point to localhost, 127.0.0.1 or [::1].
         unreachable: "Could not reach %{url}. Is the dev server running?"
         bad_response: The dev server answered with status %{status}.

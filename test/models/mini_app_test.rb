@@ -179,15 +179,18 @@ class MiniAppTest < ActiveSupport::TestCase
     end
   end
 
-  test "dev mode is available in test and self-hosted installs only" do
+  test "dev mode is available in development and Sure Desktop only" do
     assert MiniApp.dev_mode_available?
 
     Rails.env.stubs(:test?).returns(false)
-    Rails.application.config.app_mode.stubs(:self_hosted?).returns(false)
-    assert_not MiniApp.dev_mode_available?
-
     Rails.application.config.app_mode.stubs(:self_hosted?).returns(true)
-    assert MiniApp.dev_mode_available?
+    with_env_overrides("SURE_DESKTOP" => nil) do
+      assert_not MiniApp.dev_mode_available?, "self-hosted servers must not offer dev mode"
+    end
+
+    with_env_overrides("SURE_DESKTOP" => "1") do
+      assert MiniApp.dev_mode_available?
+    end
   end
 
   test "installs from a loopback dev server" do

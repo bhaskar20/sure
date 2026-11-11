@@ -262,8 +262,9 @@ Each app has its own store, separate from every other app and family.
 ## Dev mode
 
 Dev mode loads your app from a local web server, so you can edit files and
-reload without packaging. It is available in development and in self-hosted
-installs, including Sure Desktop.
+reload without packaging. It is available only when Sure runs in development
+or as Sure Desktop, not on self-hosted or hosted servers: a dev-server app loads
+outside Sure's frame CSP, so Sure cannot limit which servers it contacts.
 
 1. Copy the SDK into your app folder (the packer adds it automatically to
    zips, but a dev server serves the folder as is):
