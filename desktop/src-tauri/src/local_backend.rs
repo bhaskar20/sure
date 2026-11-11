@@ -306,8 +306,14 @@ impl LocalBackend {
         self.wait_for_port("postgres", secrets.db_port, Duration::from_secs(30))?;
 
         step("Starting job queue");
-        let valkey_conf = write_valkey_conf(data, &secrets)?;
-        let vk = spawn_logged(Command::new(rt.valkey()).arg(valkey_conf), &data.logs().join("valkey.log"))?;
+        write_valkey_conf(data, &secrets)?;
+        // Start in the data folder with a relative config path: Valkey makes the
+        // config path absolute and only recognizes POSIX paths as absolute, so a
+        // Windows path ("C:\...") would be resolved against the working folder.
+        let vk = spawn_logged(
+            Command::new(rt.valkey()).current_dir(data.valkey()).arg("valkey.conf"),
+            &data.logs().join("valkey.log"),
+        )?;
         self.remember("valkey", vk);
         self.wait_for_port("valkey", secrets.valkey_port, Duration::from_secs(30))?;
 
