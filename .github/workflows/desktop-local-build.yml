@@ -66,7 +66,13 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx tauri build --config src-tauri/tauri.local.conf.json --target ${{ matrix.rust_target }}
+        # Unset secrets arrive as empty strings, which Tauri would treat as
+        # "sign/notarize with this"; drop them so unsigned builds work.
+        run: |
+          for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            [ -n "${!v}" ] || unset "$v"
+          done
+          npx tauri build --config src-tauri/tauri.local.conf.json --target ${{ matrix.rust_target }}
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
