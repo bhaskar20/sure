@@ -286,10 +286,16 @@ impl LocalBackend {
             init_db(rt, data, &secrets)?;
         }
         let pg_log = data.logs().join("postgres.log");
-        let options = format!(
+        let mut options = format!(
             "-p {} -c listen_addresses=127.0.0.1 -c unix_socket_directories= -c max_connections=40",
             secrets.db_port
         );
+        // Extra server settings for diagnosing start-up problems (CI sets
+        // connection logging); not used by the app itself.
+        if let Ok(extra) = std::env::var("SURE_PG_OPTIONS") {
+            options.push(' ');
+            options.push_str(&extra);
+        }
         let mut pg_ctl = Command::new(rt.pg("pg_ctl"));
         pg_ctl
             .args(["start", "-w", "-t", "60", "-D"])

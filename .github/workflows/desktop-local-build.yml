@@ -133,6 +133,7 @@ jobs:
         working-directory: desktop/src-tauri
         env:
           SURE_RUNTIME_DIR: ${{ github.workspace }}\desktop\runtime
+          SURE_PG_OPTIONS: -c log_connections=on -c log_disconnections=on -c log_min_messages=debug1
         run: cargo test --locked --test packaged_runtime_test -- --nocapture
 
       - name: Build installer
