@@ -7,6 +7,7 @@
 //!   SURE_RUNTIME_DIR=$PWD/../runtime cargo test --test packaged_runtime_test -- --nocapture
 use std::path::PathBuf;
 use std::time::Duration;
+use sure_desktop_lib::dev_mode;
 use sure_desktop_lib::local_backend::{DataDir, LocalBackend, Runtime};
 
 struct Client {
@@ -129,6 +130,9 @@ fn packaged_runtime_boots_signs_up_restarts_and_signs_in() {
     let _ = std::fs::remove_dir_all(&root);
     let data = DataDir::new(root.clone());
     let _dump_on_failure = DumpLogsOnFailure(&data);
+    // Test builds are debug builds in human dev mode: Sure gets a dev sign-in token.
+    dev_mode::init_login_token();
+    let dev_token = dev_mode::login_token().expect("debug builds make a dev sign-in token");
     let email = format!("smoke-{}@example.com", std::process::id());
     let password = format!("Smoke-{}-Aa1!", std::process::id());
 
@@ -153,6 +157,26 @@ fn packaged_runtime_boots_signs_up_restarts_and_signs_in() {
         status == 302 && location2.as_deref().is_some_and(|l| l.ends_with("/onboarding")),
         "signed-in user lands on onboarding (sign-up -> {location:?}, / -> {status} {location2:?})"
     );
+    // Human dev mode: the window lists accounts and signs in as the one picked.
+    let accounts = dev_mode::fetch_accounts(&url, &dev_token).expect("dev accounts");
+    assert!(accounts.iter().any(|a| a.email == email), "the new account is listed: {accounts:?}");
+    assert!(dev_mode::fetch_accounts(&url, "wrong-token").is_err(), "a wrong token is refused");
+    let mut picked = Client::new(&url);
+    let resp = picked
+        .agent
+        .post(&format!("{url}/desktop/dev_sign_in"))
+        .send_form(&[("token", dev_token.as_str()), ("email", email.as_str())])
+        .expect("dev sign-in");
+    picked.keep_cookies(&resp);
+    assert_eq!(resp.status(), 302, "dev sign-in redirects");
+    // Signed in: Sure shows that user's app (here onboarding, since the account
+    // is new), not the sign-in page.
+    let (status, _, location) = picked.get("/");
+    assert!(
+        status == 302 && location.as_deref().is_some_and(|l| l.ends_with("/onboarding")),
+        "the picked account is signed in (/ -> {status} {location:?})"
+    );
+
     backend.stop();
     assert!(sure_desktop_lib::local_backend::port_is_free(port_of(&url)), "web port released on stop");
 

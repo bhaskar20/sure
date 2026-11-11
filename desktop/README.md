@@ -45,8 +45,9 @@ Everything below runs from `desktop/` after `npm ci`.
 |---|---|---|
 | `npm run runtime:mac` | Build the whole bundled runtime into `runtime/` (Ruby, Rails app, PostgreSQL, Valkey, llama-server, libvips). Downloads are cached in `build/`. | ~15 min first time |
 | `npm run runtime:app` | Re-stage only the Rails app into `runtime/` after changing Rails code | ~1 min |
-| `npm run dev:local` | Run the app in dev mode against `runtime/` in place: frontend hot reload, Rust rebuilt on change | ~10 s to a running Sure |
-| `npm run seed:dev` | With `dev:local` running: add test accounts and the demo family to dev data (safe to re-run) | ~1.5 min first time |
+| `npm run dev:local` | Human testing: Sure on port 3000 (stopping a Sure app already there), then pick an account to sign in as | ~10 s to a running Sure |
+| `npm run dev:agent` | For coding agents: first free port from 3100, separate data; never touches the human's app ([CLAUDE.md](CLAUDE.md)) | ~10 s |
+| `npm run seed:dev` / `seed:agent` | With the dev app running: add test accounts and the demo family to its data (safe to re-run) | ~1.5 min first time |
 | `npm run build:app` | Build `Sure.app` (copies `runtime/` into the bundle) | ~2 min |
 | `npm run build:mac` | Build `Sure.app` and the `.dmg` | ~3 min |
 | `npm run test:rust` / `test:smoke` | Rust tests / boot `runtime/` end to end | seconds / ~30 s |

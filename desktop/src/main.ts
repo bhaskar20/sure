@@ -93,7 +93,7 @@ $("server-form").addEventListener("submit", (e) => {
 type LocalStatus =
   | { state: "not_bundled" }
   | { state: "starting"; step: string }
-  | { state: "ready"; url: string }
+  | { state: "ready"; url: string; dev_login: boolean }
   | { state: "failed"; message: string; logs: string };
 
 // Packaged builds run Sure on this computer: show progress until the local
@@ -116,7 +116,8 @@ async function bootLocal(): Promise<boolean> {
       $("title").textContent = S.localTitle;
       setStatus(`${s.step}…`, "info");
     } else if (s.state === "ready") {
-      goToServer(s.url);
+      if (s.dev_login) showDevAccounts(s.url);
+      else goToServer(s.url);
     } else if (s.state === "failed") {
       $("title").textContent = S.localFailed;
       setStatus(`${s.message}\n${S.localLogs} ${s.logs}`, "error");
@@ -126,6 +127,62 @@ async function bootLocal(): Promise<boolean> {
   await listen<LocalStatus>("local-backend-status", (e) => show(e.payload));
   show(await invoke<LocalStatus>("local_backend_status"));
   return true;
+}
+
+interface DevAccount { email: string; name: string; role: string; family: string; }
+interface DevSignIn { token: string; sign_in_url: string; accounts: DevAccount[]; }
+
+// Human dev mode (debug builds): list the dev data's accounts and sign in as
+// the one picked, so testing starts on that user's dashboard.
+async function showDevAccounts(url: string) {
+  const w = window as unknown as { __sureDevPicker?: boolean };
+  if (w.__sureDevPicker) return;
+  w.__sureDevPicker = true;
+
+  let signIn: DevSignIn;
+  try {
+    signIn = await invoke<DevSignIn>("dev_accounts");
+  } catch (e) {
+    setStatus(String(e), "error");
+    goToServer(url);
+    return;
+  }
+  $("title").textContent = S.devAccountsTitle;
+  setStatus("");
+  $("dev-accounts-title").textContent = signIn.accounts.length ? "" : S.devAccountsEmpty;
+  $("dev-skip").textContent = S.devSkip;
+  $("dev-skip").addEventListener("click", () => goToServer(url));
+
+  const list = $("dev-account-list");
+  list.innerHTML = "";
+  for (const account of signIn.accounts) {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.className = "server-open";
+    button.textContent = `${account.name || account.email} · ${account.email}`;
+    button.title = `${account.role} · ${account.family}`;
+    button.addEventListener("click", () => signInAs(signIn, account.email));
+    li.append(button);
+    list.append(li);
+  }
+  $("dev-accounts").classList.remove("hidden");
+}
+
+// A form POST navigates the window to Sure, which sets the session cookie and
+// redirects to the dashboard.
+function signInAs(signIn: DevSignIn, email: string) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = signIn.sign_in_url;
+  for (const [name, value] of [["token", signIn.token], ["email", email]]) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  }
+  document.body.append(form);
+  form.submit();
 }
 
 // On launch, resume straight to the last server if there is one; otherwise

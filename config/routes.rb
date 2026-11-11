@@ -387,6 +387,9 @@ Rails.application.routes.draw do
   # work), then hands a single-use, PKCE-bound code back via the sure:// scheme
   # which the desktop webview exchanges for a normal web session.
   post "/sessions/desktop_exchange", to: "sessions#desktop_exchange", as: :desktop_sso_exchange
+  # Sure Desktop dev builds: sign in as a dev account (token-protected, 404 otherwise).
+  get "/desktop/dev_accounts", to: "desktop/dev_sessions#index", as: :desktop_dev_accounts
+  post "/desktop/dev_sign_in", to: "desktop/dev_sessions#create", as: :desktop_dev_sign_in
   get "/auth/desktop/:provider", to: "sessions#desktop_sso_start"
   get "/auth/mobile/:provider", to: "sessions#mobile_sso_start"
   match "/auth/:provider/callback", to: "sessions#openid_connect", via: %i[get post]
