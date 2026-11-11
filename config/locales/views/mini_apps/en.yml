@@ -1,0 +1,104 @@
+---
+en:
+  mini_apps:
+    index:
+      title: Apps
+      subtitle: Small apps that run inside Sure, with only the access you grant them.
+      empty_title: No apps yet
+      empty_description: Apps add new pages to Sure. They see only the data you allow, and you can pause or remove them at any time.
+      empty_description_member: Ask a family admin to install an app.
+      open: Open
+      disabled: Disabled
+      dev_server: Dev server
+      version: Version %{version}
+      manage: Manage access
+      activity: Activity
+      enable: Enable
+      disable: Disable
+      uninstall: Uninstall
+      uninstall_confirm_title: Uninstall %{name}?
+      uninstall_confirm_body: This deletes the app's files, everything it has stored and its activity history. Your Sure data is not affected.
+      uninstall_confirm_button: Uninstall
+    install_form:
+      title: Install an app
+      description: Upload an app's zip file. You choose what it can access on the next step.
+      bundle_label: App bundle (.zip)
+      install: Install
+      dev_url_label: Development server URL
+      dev_url_help: Load an app you are building from a localhost URL. Available on development and self-hosted installs only.
+      dev_url_placeholder: http://localhost:5173/
+      load_dev: Load from dev server
+      upgrade_label: Replace the installed app
+      upgrade_help: Tick this only to upgrade an app you already installed with the same app ID. The new version keeps that app's stored data, so review its access again; changes to data will ask first until you allow otherwise.
+    new:
+      title: Install an app
+    show:
+      dev_server_title: Running from a development server
+      dev_server_warning: "This app is loaded from %{url}, so Sure's network restrictions do not apply. It can send anything it reads to any server."
+      disabled: This app is disabled. An admin can enable it on the Apps page.
+      frame_title: "%{name} app"
+      activity: Activity
+      manage: Manage access
+      back: All apps
+      confirm_title: Allow this change?
+      confirm_intro: "%{name} wants to make this change:"
+      confirm_details: What will change
+      confirm_hint: Sure is asking, not the app. Nothing changes unless you allow it.
+      approve: Allow
+      decline: Don't allow
+    consent:
+      title: Review access for %{name}
+      subtitle: Choose what this app may do. Every call is checked against these grants, and you can change them at any time.
+      permissions_title: Permissions
+      permissions_help: Only what you tick here is granted. Unticked permissions are refused when the app asks for them.
+      no_permissions: This app does not ask for any access to your data.
+      write_badge: Changes data
+      write_policy_title: Changes to data
+      write_policy_confirm: Ask every time
+      write_policy_confirm_description: Sure shows a dialog before each change the app makes, and nothing happens unless the person using the app allows it.
+      write_policy_allow: Allow without asking
+      write_policy_allow_description: Granted changes go through straight away. They are still recorded in the app's activity.
+      network_title: Network access
+      network_none: This app cannot contact any server outside Sure.
+      network_some: "This app may contact these servers:"
+      network_dev_server_title: Not restricted in dev mode
+      network_dev_server: This app is loaded from a development server, so Sure cannot limit which servers it contacts. Anything it can read through the permissions below could be sent anywhere. Grant only what you would share with the app's developer, and install a zip for everyday use.
+      details_title: Details
+      source: Source
+      source_bundle: Uploaded bundle
+      source_dev_server: Development server
+      dev_url: Dev server URL
+      version: Version
+      author: Author
+      sha256: Bundle SHA-256
+      installed_by: Installed by
+      guest_note: Guests can only read data, whatever is granted here.
+      save: Save and open
+      save_disabled: Save
+      cancel: Back to apps
+    create:
+      installed: "%{name} was installed. Review what it can access."
+      missing_source: Choose a zip file to install.
+    update:
+      saved: App settings saved.
+    destroy:
+      removed: "%{name} was uninstalled."
+    activity:
+      title: Activity for %{name}
+      subtitle: Every call this app made, including the ones that were refused.
+      empty: No activity yet.
+      table_label: App activity
+      time: Time
+      user: Person
+      call: Call
+      permission: Permission
+      outcome: Outcome
+      details: Details
+      unknown_user: Removed user
+      write: Write
+      outcomes:
+        ok: Allowed
+        denied: Denied
+        declined: Declined
+        error: Failed
+      back: All apps

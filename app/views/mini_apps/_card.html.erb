@@ -1,0 +1,60 @@
+<%# locals: (mini_app:) %>
+<%= render DS::Card.new(class: "gap-4", id: dom_id(mini_app)) do %>
+  <div class="flex items-start gap-3">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-container-inset shrink-0">
+      <%= icon(mini_app.icon.presence || "blocks", size: "md") %>
+    </div>
+
+    <div class="min-w-0 grow">
+      <div class="flex items-center gap-2 flex-wrap">
+        <h2 class="font-medium text-primary truncate"><%= mini_app.name %></h2>
+        <% if mini_app.disabled? %>
+          <%= render DS::Pill.new(label: t("mini_apps.index.disabled"), tone: :gray, marker: false) %>
+        <% end %>
+        <% if mini_app.dev_server? %>
+          <%= render DS::Pill.new(label: t("mini_apps.index.dev_server"), tone: :amber, marker: false) %>
+        <% end %>
+      </div>
+      <p class="text-xs text-secondary"><%= t("mini_apps.index.version", version: mini_app.version) %></p>
+    </div>
+
+    <% if Current.user.admin? %>
+      <%= render DS::Menu.new(variant: "icon") do |menu| %>
+        <% menu.with_item(variant: "link", text: t("mini_apps.index.manage"), href: consent_mini_app_path(mini_app), icon: "shield-check") %>
+        <% menu.with_item(variant: "link", text: t("mini_apps.index.activity"), href: activity_mini_app_path(mini_app), icon: "list") %>
+        <% if mini_app.enabled? %>
+          <% menu.with_item(variant: "button", text: t("mini_apps.index.disable"), href: mini_app_path(mini_app), method: :patch,
+                            params: { "mini_app[status]" => "disabled" }, icon: "pause") %>
+        <% else %>
+          <% menu.with_item(variant: "button", text: t("mini_apps.index.enable"), href: mini_app_path(mini_app), method: :patch,
+                            params: { "mini_app[status]" => "enabled" }, icon: "play") %>
+        <% end %>
+        <% menu.with_item(variant: "divider") %>
+        <% menu.with_item(
+              variant: "button",
+              text: t("mini_apps.index.uninstall"),
+              href: mini_app_path(mini_app),
+              method: :delete,
+              icon: "trash-2",
+              confirm: CustomConfirm.new(
+                title: t("mini_apps.index.uninstall_confirm_title", name: mini_app.name),
+                body: t("mini_apps.index.uninstall_confirm_body"),
+                btn_text: t("mini_apps.index.uninstall_confirm_button"),
+                destructive: true,
+                high_severity: true
+              )
+            ) %>
+      <% end %>
+    <% end %>
+  </div>
+
+  <% if mini_app.description.present? %>
+    <p class="text-sm text-secondary line-clamp-3"><%= mini_app.description %></p>
+  <% end %>
+
+  <% if mini_app.enabled? %>
+    <div class="mt-auto">
+      <%= render DS::Link.new(text: t("mini_apps.index.open"), href: mini_app_path(mini_app), variant: "secondary", icon: "arrow-right", icon_position: :right) %>
+    </div>
+  <% end %>
+<% end %>

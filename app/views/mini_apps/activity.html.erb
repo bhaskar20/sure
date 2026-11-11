@@ -1,0 +1,36 @@
+<%= content_for :page_title, t(".title", name: @mini_app.name) %>
+
+<div class="space-y-6 pb-6 lg:pb-12">
+  <header class="flex items-start justify-between gap-3 flex-wrap">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-semibold text-primary"><%= t(".title", name: @mini_app.name) %></h1>
+        <%= render DS::Pill.new(label: t("shared.preview"), size: :md) %>
+      </div>
+      <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
+    </div>
+    <%= render DS::Link.new(text: t(".back"), href: mini_apps_path, variant: "ghost", icon: "arrow-left") %>
+  </header>
+
+  <% if @activities.any? %>
+    <%= render DS::Table.new(rows: @activities, label: t(".table_label")) do |table| %>
+      <% table.with_column(t(".time"), class: "text-secondary whitespace-nowrap") { |activity| l(activity.created_at, format: :short) } %>
+      <% table.with_column(t(".user")) { |activity| activity.user&.display_name || t(".unknown_user") } %>
+      <% table.with_column(t(".call")) do |activity| %>
+        <code class="text-xs"><%= activity.tool.presence || activity.rpc_method %></code>
+        <% if activity.write? %>
+          <%= render DS::Pill.new(label: t(".write"), tone: :warning, marker: false) %>
+        <% end %>
+      <% end %>
+      <% table.with_column(t(".permission"), class: "text-secondary") { |activity| activity.permission.presence || "—" } %>
+      <% table.with_column(t(".outcome")) do |activity| %>
+        <%= render DS::Pill.new(label: t(".outcomes.#{activity.outcome}"), tone: mini_app_outcome_tone(activity), marker: false) %>
+      <% end %>
+      <% table.with_column(t(".details"), class: "text-secondary text-xs") { |activity| activity.error_message.to_s } %>
+    <% end %>
+  <% else %>
+    <%= render DS::Card.new do %>
+      <%= render DS::EmptyState.new(icon: "list", title: t(".empty")) %>
+    <% end %>
+  <% end %>
+</div>

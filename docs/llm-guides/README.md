@@ -17,6 +17,7 @@ being changed. These guides hold the detailed conventions and procedures.
 | Add a preview survey or usage event | [Feedback surveys](feedback-surveys.md) |
 | Gate or release a preview feature | [Preview-feature gating](gating-a-preview-feature.md) |
 | Change goals, pledges or reconciliation | [Goals](goals.md) |
+| Build, package or document a mini app (SDK, manifest, bridge) | [Mini apps developer guide](../miniapps/README.md) |
 | Claim, build or hand off a tracked feature request | [Feature requests](../features/README.md) |
 
 ## External wealth integration

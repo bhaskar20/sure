@@ -1,0 +1,71 @@
+---
+en:
+  mini_app:
+    bridge:
+      confirm:
+        summary: "%{app} wants to %{action}."
+        not_found: "%{id} (not found)"
+        "yes": "Yes"
+        "no": "No"
+        unnamed_rule: Unnamed rule
+        more_label: More
+        more:
+          one: 1 more value
+          other: "%{count} more values"
+        fields:
+          id: Record
+          transaction_id: Transaction
+          counterpart_transaction_id: Other transaction
+          account_id: Account
+          target_account_id: Account
+          category_id: Category
+          parent_id: Parent category
+          replacement_id: Move transactions to
+          merchant_id: Merchant
+          tag_ids: Tags
+          rule_id: Rule
+          transfer_id: Transfer
+          amount: Amount
+          date: Date
+          name: Name
+          new_name: New name
+          notes: Notes
+          currency: Currency
+      errors:
+        app_disabled: This app is disabled.
+        confirmation_required: This change needs your confirmation.
+        declined: You declined this change.
+        invalid_collection: Collection names use lowercase letters, numbers, dashes and underscores (up to 64 characters).
+        invalid_cursor: The cursor is not valid.
+        invalid_key: Keys can be up to 255 characters.
+        invalid_limit: The limit must be a positive whole number.
+        invalid_params: The request parameters are not valid.
+        invalid_request: The request is not a valid JSON-RPC 2.0 message.
+        method_not_found: This method is not available.
+        missing_param: "The %{param} parameter is required."
+        not_a_member: You do not have access to this app.
+        parse_error: The message could not be read.
+        permission_denied: "This app has not been given the \"%{permission}\" permission."
+        rate_limited: This app is making too many requests. Try again in a minute.
+        tool_failed: The tool failed to run.
+        tool_not_available: "The tool \"%{tool}\" is not available to apps."
+      tool_actions:
+        apply_rule: apply a rule to your transactions
+        create_category: create a category
+        create_goal: create a goal
+        create_rule: create a rule
+        create_tag: create a tag
+        create_transaction: create a transaction
+        delete_category: delete a category
+        delete_transaction: delete a transaction
+        match_transfer: match two transactions as a transfer
+        record_valuation: record an account valuation
+        review_transfer: review a transfer
+        set_opening_balance: set an account's opening balance
+        unmatch_transfer: unmatch a transfer
+        update_budget: update your budget
+        update_category: update a category
+        update_rule: update a rule
+        update_tag: update a tag
+        update_transaction: update a transaction
+        update_transfer: update a transfer

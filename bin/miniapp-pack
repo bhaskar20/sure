@@ -1,0 +1,155 @@
+#!/usr/bin/env ruby
+# Packs a Sure mini app folder into a zip that Sure can install.
+#
+#   bin/miniapp-pack examples/miniapps/recategorizer
+#   bin/miniapp-pack path/to/app -o dist/my-app.zip
+#   bin/miniapp-pack path/to/app --sdk   # only copy sure-miniapp.js in, for dev mode
+#
+# The folder must hold miniapp.json at its root. packages/miniapp-sdk/sure-miniapp.js
+# is added to the bundle as sure-miniapp.js unless the folder already has one.
+# Hidden files, zips and node_modules are left out.
+require "rubygems"
+require "bundler/setup"
+require "fileutils"
+require "json"
+require "optparse"
+require "zip"
+
+module MiniAppPack
+  SDK_PATH = File.expand_path("../packages/miniapp-sdk/sure-miniapp.js", __dir__)
+  SDK_NAME = "sure-miniapp.js"
+  MAX_FILES = 300
+  MAX_UNPACKED_BYTES = 20 * 1024 * 1024
+  MAX_ZIP_BYTES = 10 * 1024 * 1024
+  ID_FORMAT = /\A[a-z0-9][a-z0-9.\-]{2,63}\z/
+  VERSION_FORMAT = /\A[0-9A-Za-z.+\-]{1,32}\z/
+  EXCLUDED_DIRS = %w[node_modules].freeze
+
+  class Error < StandardError; end
+
+  module_function
+
+  def run(argv)
+    options = { output: nil, sdk_only: false }
+    parser = OptionParser.new do |opts|
+      opts.banner = "Usage: bin/miniapp-pack APP_DIR [-o OUTPUT.zip] [--sdk]"
+      opts.on("-o", "--output PATH", "Where to write the zip (default: <id>-<version>.zip)") { |v| options[:output] = v }
+      opts.on("--sdk", "Copy sure-miniapp.js into APP_DIR for dev mode and exit") { options[:sdk_only] = true }
+      opts.on("-h", "--help", "Show this help") do
+        puts opts
+        exit
+      end
+    end
+    args = parser.parse(argv)
+    raise Error, parser.banner unless args.size == 1
+
+    dir = File.expand_path(args.first)
+    raise Error, "#{dir} is not a folder." unless File.directory?(dir)
+
+    return copy_sdk(dir) if options[:sdk_only]
+
+    manifest = read_manifest(dir)
+    files = collect_files(dir)
+    validate!(manifest, files)
+
+    output = File.expand_path(options[:output] || "#{manifest["id"]}-#{manifest["version"]}.zip")
+    write_zip(dir, files, output)
+    report(manifest, files, output)
+  end
+
+  def copy_sdk(dir)
+    target = File.join(dir, SDK_NAME)
+    FileUtils.cp(SDK_PATH, target)
+    puts "Copied #{SDK_NAME} into #{dir}"
+  end
+
+  def read_manifest(dir)
+    path = File.join(dir, "miniapp.json")
+    raise Error, "#{dir} has no miniapp.json at its root." unless File.file?(path)
+
+    manifest = JSON.parse(File.read(path))
+    raise Error, "miniapp.json must be a JSON object." unless manifest.is_a?(Hash)
+
+    manifest
+  rescue JSON::ParserError => e
+    raise Error, "miniapp.json is not valid JSON: #{e.message}"
+  end
+
+  # Returns { "relative/path" => "absolute/path" } for every file to pack.
+  def collect_files(dir)
+    files = {}
+    walk(dir, "") { |relative, absolute| files[relative] = absolute }
+    files[SDK_NAME] ||= SDK_PATH
+    files
+  end
+
+  def walk(dir, prefix, &block)
+    Dir.children(dir).sort.each do |name|
+      next if name.start_with?(".")
+
+      absolute = File.join(dir, name)
+      relative = prefix.empty? ? name : "#{prefix}/#{name}"
+      raise Error, "#{relative} is a symlink; Sure rejects bundles with symlinks." if File.symlink?(absolute)
+
+      if File.directory?(absolute)
+        walk(absolute, relative, &block) unless EXCLUDED_DIRS.include?(name)
+      elsif File.file?(absolute) && !name.end_with?(".zip")
+        yield relative, absolute
+      end
+    end
+  end
+
+  def validate!(manifest, files)
+    problems = []
+    problems << "\"id\" must match #{ID_FORMAT.source}" unless manifest["id"].to_s.match?(ID_FORMAT)
+    problems << "\"name\" is required (at most 60 characters)" if manifest["name"].to_s.strip.empty? || manifest["name"].to_s.length > 60
+    problems << "\"version\" must match #{VERSION_FORMAT.source}" unless manifest["version"].to_s.match?(VERSION_FORMAT)
+
+    entry = manifest["entry"] || "index.html"
+    problems << "the entry file #{entry} is missing" unless files.key?(entry)
+
+    slots = manifest["slots"] || [ "page" ]
+    problems << "\"slots\" may only contain \"page\"" unless slots.is_a?(Array) && (slots - [ "page" ]).empty?
+
+    Array(manifest["network"]).each do |origin|
+      problems << "network origin #{origin} must be https://host" unless origin.to_s.match?(%r{\Ahttps://[A-Za-z0-9.\-]+(:\d{1,5})?\z})
+    end
+
+    problems << "#{files.size} files is more than the #{MAX_FILES} Sure accepts" if files.size > MAX_FILES
+    unpacked = files.values.sum { |path| File.size(path) }
+    problems << "#{unpacked} bytes unpacked is more than Sure accepts (#{MAX_UNPACKED_BYTES})" if unpacked > MAX_UNPACKED_BYTES
+
+    raise Error, "miniapp.json is not valid:\n  - #{problems.join("\n  - ")}" if problems.any?
+  end
+
+  def write_zip(dir, files, output)
+    FileUtils.mkdir_p(File.dirname(output))
+    FileUtils.rm_f(output)
+    Zip::File.open(output, create: true) do |zip|
+      files.each { |relative, absolute| zip.add(relative, absolute) }
+    end
+
+    size = File.size(output)
+    return if size <= MAX_ZIP_BYTES
+
+    FileUtils.rm_f(output)
+    raise Error, "The zip is #{size} bytes; Sure accepts at most #{MAX_ZIP_BYTES}."
+  end
+
+  def report(manifest, files, output)
+    sha256 = Digest::SHA256.file(output).hexdigest
+    puts "Packed #{manifest["name"]} #{manifest["version"]} (#{files.size} files)"
+    puts "  #{output}"
+    puts "  SHA-256 #{sha256}"
+    puts "Install it from Sure: Apps > Install, then compare the SHA-256 Sure shows."
+  end
+end
+
+require "digest"
+
+begin
+  MiniAppPack.run(ARGV)
+rescue MiniAppPack::Error, OptionParser::ParseError => e
+  warn "miniapp-pack: #{e.message}"
+  exit 1
+end

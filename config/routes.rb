@@ -543,6 +543,18 @@ Rails.application.routes.draw do
     end
   end
 
+  resources :mini_apps, only: %i[index show new create update destroy] do
+    member do
+      get :consent
+      post :bridge
+      get :activity
+    end
+  end
+
+  # Files of an installed mini app, served to its sandboxed (opaque-origin,
+  # cookieless) frame. The signed token in the path is the only credential.
+  get "mini_app_frames/:token(/*path)", to: "mini_app_frames#show", as: :mini_app_frame, format: false
+
   resources :merchants, only: :show
 
   resources :family_merchants, only: %i[index new create edit update destroy] do

@@ -1,0 +1,37 @@
+{
+  "name": "@sure/miniapp-sdk",
+  "version": "1.0.0",
+  "description": "Client SDK, types and manifest schema for building Sure mini apps.",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "./sure-miniapp.js",
+  "module": "./index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "default": "./sure-miniapp.js"
+    },
+    "./sure-miniapp.js": "./sure-miniapp.js",
+    "./miniapp.schema.json": "./miniapp.schema.json"
+  },
+  "files": [
+    "sure-miniapp.js",
+    "index.mjs",
+    "index.d.ts",
+    "miniapp.schema.json",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./sure-miniapp.js",
+    "./index.mjs"
+  ],
+  "keywords": [
+    "sure",
+    "mini-app",
+    "personal-finance",
+    "mcp-apps",
+    "sdk"
+  ]
+}

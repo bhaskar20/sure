@@ -1,0 +1,24 @@
+_fixture:
+  model_class: MiniApp::Activity
+
+recategorizer_list:
+  mini_app: recategorizer
+  user: family_admin
+  rpc_method: tools/call
+  tool: get_transactions
+  permission: transactions:read
+  outcome: ok
+  write: false
+  summary: {}
+  created_at: <%= 1.hour.ago %>
+
+recategorizer_denied:
+  mini_app: recategorizer
+  user: family_member
+  rpc_method: tools/call
+  tool: create_rule
+  permission: rules:write
+  outcome: denied
+  write: true
+  summary: {}
+  created_at: <%= 30.minutes.ago %>

@@ -1,0 +1,17 @@
+{
+  "id": "com.example.recategorizer",
+  "name": "Recategorizer",
+  "version": "1.0.0",
+  "description": "Lists recent transactions, creates categories and moves a transaction to a new category. Remembers your filter between visits.",
+  "entry": "index.html",
+  "icon": "tags",
+  "permissions": [
+    "transactions:read",
+    "transactions:write",
+    "categories:read",
+    "categories:write"
+  ],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure"
+}

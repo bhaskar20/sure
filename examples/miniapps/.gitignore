@@ -1,0 +1,3 @@
+# Copied in by `bin/miniapp-pack --sdk` for dev mode; the packer adds it to bundles.
+*/sure-miniapp.js
+*.zip

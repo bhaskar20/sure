@@ -1,0 +1,16 @@
+_fixture:
+  model_class: MiniApp::Asset
+
+recategorizer_index:
+  mini_app: recategorizer
+  path: index.html
+  content_type: text/html
+  content: "<!doctype html><html><body><h1>Recategorizer</h1><script src=\"app.js\"></script></body></html>"
+  byte_size: 93
+
+recategorizer_script:
+  mini_app: recategorizer
+  path: app.js
+  content_type: text/javascript
+  content: "document.body.dataset.ready = 'true';"
+  byte_size: 37

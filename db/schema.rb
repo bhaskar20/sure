@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -1730,6 +1730,65 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
     t.index ["chat_id"], name: "index_messages_on_chat_id"
   end
 
+  create_table "mini_app_activities", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "mini_app_id", null: false
+    t.uuid "user_id"
+    t.string "rpc_method", null: false
+    t.string "tool"
+    t.string "permission"
+    t.string "outcome", null: false
+    t.boolean "write", default: false, null: false
+    t.jsonb "summary", default: {}, null: false
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.index ["mini_app_id", "created_at"], name: "index_mini_app_activities_on_mini_app_id_and_created_at"
+    t.index ["user_id"], name: "index_mini_app_activities_on_user_id"
+  end
+
+  create_table "mini_app_assets", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "mini_app_id", null: false
+    t.string "path", null: false
+    t.string "content_type", null: false
+    t.binary "content", null: false
+    t.integer "byte_size", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["mini_app_id", "path"], name: "index_mini_app_assets_on_mini_app_id_and_path", unique: true
+  end
+
+  create_table "mini_app_records", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "mini_app_id", null: false
+    t.string "collection", null: false
+    t.string "key", null: false
+    t.jsonb "data", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["mini_app_id", "collection", "key"], name: "index_mini_app_records_on_mini_app_id_and_collection_and_key", unique: true
+  end
+
+  create_table "mini_apps", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.uuid "installed_by_id"
+    t.string "app_key", null: false
+    t.string "name", null: false
+    t.string "version", null: false
+    t.text "description"
+    t.jsonb "manifest", default: {}, null: false
+    t.string "icon"
+    t.string "source", default: "bundle", null: false
+    t.string "dev_url"
+    t.string "bundle_sha256"
+    t.string "status", default: "enabled", null: false
+    t.string "granted_permissions", default: [], null: false, array: true
+    t.string "write_policy", default: "confirm", null: false
+    t.datetime "last_opened_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["family_id", "app_key"], name: "index_mini_apps_on_family_id_and_app_key", unique: true
+    t.index ["family_id"], name: "index_mini_apps_on_family_id"
+    t.index ["installed_by_id"], name: "index_mini_apps_on_installed_by_id"
+  end
+
   create_table "mobile_devices", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.string "app_version"
     t.datetime "created_at", null: false
@@ -3196,6 +3255,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_01_120000) do
   add_foreign_key "mercury_accounts", "mercury_items"
   add_foreign_key "mercury_items", "families"
   add_foreign_key "messages", "chats"
+  add_foreign_key "mini_app_activities", "mini_apps", on_delete: :cascade
+  add_foreign_key "mini_app_activities", "users", on_delete: :nullify
+  add_foreign_key "mini_app_assets", "mini_apps", on_delete: :cascade
+  add_foreign_key "mini_app_records", "mini_apps", on_delete: :cascade
+  add_foreign_key "mini_apps", "families"
+  add_foreign_key "mini_apps", "users", column: "installed_by_id", on_delete: :nullify
   add_foreign_key "mobile_devices", "users"
   add_foreign_key "monobank_accounts", "monobank_items"
   add_foreign_key "monobank_items", "families"

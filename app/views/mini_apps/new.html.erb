@@ -1,0 +1,5 @@
+<%= content_for :page_title, t(".title") %>
+
+<div class="max-w-2xl space-y-6 pb-6">
+  <%= render "mini_apps/install_form", dev_mode_available: @dev_mode_available %>
+</div>

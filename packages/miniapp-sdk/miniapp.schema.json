@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://sure.am/schemas/miniapp.schema.json",
+  "title": "Sure mini app manifest (miniapp.json)",
+  "description": "Describes a Sure mini app: who it is, which file to open, and which permissions it asks the family admin to grant.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional pointer to this schema for editor support."
+    },
+    "id": {
+      "type": "string",
+      "description": "Stable, unique identifier. Installing a bundle with the same id upgrades the installed app and keeps its storage.",
+      "pattern": "^[a-z0-9][a-z0-9.\\-]{2,63}$",
+      "examples": [
+        "com.example.recategorizer"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "Name shown in the Apps list and the page title.",
+      "minLength": 1,
+      "maxLength": 60
+    },
+    "version": {
+      "type": "string",
+      "description": "Version of this bundle, for example a semantic version (letters, digits, '.', '+' and '-'; at most 32 characters).",
+      "examples": [
+        "1.0.0"
+      ],
+      "pattern": "^[0-9A-Za-z.+\\-]{1,32}$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description shown at install and in the Apps list.",
+      "maxLength": 500
+    },
+    "entry": {
+      "type": "string",
+      "description": "Path of the HTML file to open, relative to the bundle root.",
+      "default": "index.html"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Lucide icon name used in Sure's navigation and Apps list.",
+      "default": "blocks",
+      "examples": [
+        "blocks",
+        "tags",
+        "piggy-bank"
+      ],
+      "pattern": "^[a-z0-9\\-]{1,40}$"
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Permissions the app requests. The admin may grant any subset; ask only for what you use.",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "type": "string",
+        "enum": [
+          "accounts:read",
+          "transactions:read",
+          "transactions:write",
+          "categories:read",
+          "categories:write",
+          "tags:read",
+          "tags:write",
+          "merchants:read",
+          "rules:read",
+          "rules:write",
+          "reports:read",
+          "budgets:write",
+          "goals:write",
+          "valuations:write"
+        ]
+      }
+    },
+    "slots": {
+      "type": "array",
+      "description": "Where the app's UI appears. Bridge version 1 supports only the full-page slot.",
+      "uniqueItems": true,
+      "default": [
+        "page"
+      ],
+      "items": {
+        "type": "string",
+        "enum": [
+          "page"
+        ]
+      }
+    },
+    "network": {
+      "type": "array",
+      "description": "HTTPS origins the app may fetch from (they become the frame's connect-src). Leave empty for an app that works offline.",
+      "uniqueItems": true,
+      "default": [],
+      "items": {
+        "type": "string",
+        "pattern": "^https://[A-Za-z0-9.\\-]+(:[0-9]{1,5})?$",
+        "examples": [
+          "https://api.example.com"
+        ]
+      }
+    },
+    "author": {
+      "type": "string",
+      "description": "Author or organization name.",
+      "maxLength": 100
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Where people can learn more about the app.",
+      "format": "uri"
+    }
+  }
+}

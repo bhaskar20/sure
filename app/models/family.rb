@@ -73,6 +73,7 @@ class Family < ApplicationRecord
   has_many :budget_categories, through: :budgets
 
   has_many :goals, dependent: :destroy
+  has_many :mini_apps, dependent: :destroy
 
   # Net inflow into every depository account linked to any primary-currency
   # goal, over the given window. Transfers between linked accounts net to zero

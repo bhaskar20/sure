@@ -1,0 +1,123 @@
+<%= content_for :page_title, t(".title", name: @mini_app.name) %>
+
+<div class="max-w-3xl space-y-6 pb-6 lg:pb-12">
+  <header class="flex items-start gap-3">
+    <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-container-inset shrink-0">
+      <%= icon(@mini_app.icon.presence || "blocks", size: "md") %>
+    </div>
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl font-semibold text-primary"><%= t(".title", name: @mini_app.name) %></h1>
+        <%= render DS::Pill.new(label: t("shared.preview"), size: :md) %>
+      </div>
+      <p class="text-sm text-secondary mt-1"><%= t(".subtitle") %></p>
+    </div>
+  </header>
+
+  <%= styled_form_with url: mini_app_path(@mini_app), method: :patch, class: "space-y-6" do |form| %>
+    <%= render DS::Card.new(class: "gap-3") do %>
+      <div>
+        <h2 class="font-medium text-primary"><%= t(".permissions_title") %></h2>
+        <p class="text-sm text-secondary mt-1"><%= t(".permissions_help") %></p>
+      </div>
+
+      <%= hidden_field_tag "mini_app[granted_permissions][]", "", id: nil %>
+
+      <% if @requested_permissions.any? %>
+        <div class="space-y-2">
+          <% @requested_permissions.each do |permission| %>
+            <label class="flex items-start gap-3 cursor-pointer bg-surface-inset rounded-lg p-3 border border-primary">
+              <%= check_box_tag "mini_app[granted_permissions][]", permission, @mini_app.granted?(permission),
+                    id: "permission_#{MiniApp::Permission.i18n_key(permission)}", class: "checkbox checkbox--light mt-1" %>
+              <span class="flex-1">
+                <span class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-primary"><%= MiniApp::Permission.label(permission) %></span>
+                  <code class="text-xs text-secondary"><%= permission %></code>
+                  <% if MiniApp::Permission.write?(permission) %>
+                    <%= render DS::Pill.new(label: t(".write_badge"), tone: :warning, marker: false) %>
+                  <% end %>
+                </span>
+                <span class="block text-sm text-secondary mt-1"><%= MiniApp::Permission.description(permission) %></span>
+              </span>
+            </label>
+          <% end %>
+        </div>
+        <p class="text-xs text-secondary"><%= t(".guest_note") %></p>
+      <% else %>
+        <p class="text-sm text-secondary"><%= t(".no_permissions") %></p>
+      <% end %>
+    <% end %>
+
+    <%= render DS::Card.new(class: "gap-3") do %>
+      <h2 class="font-medium text-primary"><%= t(".write_policy_title") %></h2>
+      <div class="space-y-2">
+        <% %w[confirm allow].each do |policy| %>
+          <label class="flex items-start gap-3 cursor-pointer bg-surface-inset rounded-lg p-3 border border-primary">
+            <%= radio_button_tag "mini_app[write_policy]", policy, @mini_app.write_policy == policy, class: "mt-1" %>
+            <span class="flex-1">
+              <span class="block font-medium text-primary"><%= t(".write_policy_#{policy}") %></span>
+              <span class="block text-sm text-secondary mt-1"><%= t(".write_policy_#{policy}_description") %></span>
+            </span>
+          </label>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%= render DS::Card.new(class: "gap-3") do %>
+      <h2 class="font-medium text-primary"><%= t(".network_title") %></h2>
+      <% if @mini_app.dev_server? %>
+        <%= render DS::Alert.new(title: t(".network_dev_server_title"), message: t(".network_dev_server"), variant: :warning) %>
+      <% elsif @mini_app.network_origins.any? %>
+        <p class="text-sm text-secondary"><%= t(".network_some") %></p>
+        <ul class="space-y-1">
+          <% @mini_app.network_origins.each do |origin| %>
+            <li class="flex items-center gap-2 text-sm text-primary">
+              <%= icon("globe", size: "sm") %>
+              <code class="break-all"><%= origin %></code>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p class="text-sm text-secondary"><%= t(".network_none") %></p>
+      <% end %>
+    <% end %>
+
+    <%= render DS::Card.new(class: "gap-3") do %>
+      <h2 class="font-medium text-primary"><%= t(".details_title") %></h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">
+        <dt class="text-secondary"><%= t(".version") %></dt>
+        <dd class="sm:col-span-2 text-primary"><%= @mini_app.version %></dd>
+
+        <dt class="text-secondary"><%= t(".source") %></dt>
+        <dd class="sm:col-span-2 text-primary">
+          <%= @mini_app.dev_server? ? t(".source_dev_server") : t(".source_bundle") %>
+        </dd>
+
+        <% if @mini_app.dev_server? %>
+          <dt class="text-secondary"><%= t(".dev_url") %></dt>
+          <dd class="sm:col-span-2 text-primary"><code class="break-all"><%= @mini_app.dev_url %></code></dd>
+        <% end %>
+
+        <% if @mini_app.bundle_sha256.present? %>
+          <dt class="text-secondary"><%= t(".sha256") %></dt>
+          <dd class="sm:col-span-2 text-primary"><code class="text-xs break-all"><%= @mini_app.bundle_sha256 %></code></dd>
+        <% end %>
+
+        <% if (author = @mini_app.manifest&.dig("author")).present? %>
+          <dt class="text-secondary"><%= t(".author") %></dt>
+          <dd class="sm:col-span-2 text-primary"><%= author.is_a?(Hash) ? author["name"] : author %></dd>
+        <% end %>
+
+        <% if @mini_app.installed_by %>
+          <dt class="text-secondary"><%= t(".installed_by") %></dt>
+          <dd class="sm:col-span-2 text-primary"><%= @mini_app.installed_by.display_name %></dd>
+        <% end %>
+      </dl>
+    <% end %>
+
+    <div class="flex justify-end gap-3">
+      <%= render DS::Link.new(text: t(".cancel"), href: mini_apps_path, variant: "ghost") %>
+      <%= render DS::Button.new(text: @mini_app.enabled? ? t(".save") : t(".save_disabled"), variant: "primary", type: "submit") %>
+    </div>
+  <% end %>
+</div>

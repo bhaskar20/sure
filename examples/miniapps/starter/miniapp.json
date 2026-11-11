@@ -1,0 +1,12 @@
+{
+  "id": "com.example.starter",
+  "name": "Starter",
+  "version": "1.0.0",
+  "description": "A minimal Sure mini app: connects to Sure, shows its permissions and saves a note in its own storage.",
+  "entry": "index.html",
+  "icon": "blocks",
+  "permissions": ["accounts:read"],
+  "slots": ["page"],
+  "network": [],
+  "author": "Sure"
+}
