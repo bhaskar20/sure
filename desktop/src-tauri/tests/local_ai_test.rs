@@ -46,11 +46,11 @@ fn settings_persist_with_a_stable_port_and_key() {
     assert_eq!(first.api_key.len(), 48);
     assert_ne!(first.port, 0);
     ai.set_enabled(true).unwrap();
-    ai.set_context(16384).unwrap();
+    ai.set_context(65536).unwrap();
 
     let again = LocalAi::new(Some(fake_server(&root)), root).unwrap().config();
     assert!(again.enabled);
-    assert_eq!(again.context, 16384);
+    assert_eq!(again.context, 65536);
     assert_eq!(again.api_key, first.api_key);
     assert_eq!(again.port, first.port);
 }
@@ -59,8 +59,8 @@ fn settings_persist_with_a_stable_port_and_key() {
 fn context_is_clamped_to_a_usable_range() {
     let root = temp_root("clamp");
     let ai = Arc::new(LocalAi::new(Some(fake_server(&root)), root).unwrap());
-    ai.set_context(10).unwrap();
-    assert_eq!(ai.config().context, 2048);
+    ai.set_context(4096).unwrap();
+    assert_eq!(ai.config().context, 32_768, "a chat turn with one tool call exceeds 16K tokens");
     ai.set_context(10_000_000).unwrap();
     assert_eq!(ai.config().context, 131_072);
 }

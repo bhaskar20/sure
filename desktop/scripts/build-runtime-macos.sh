@@ -129,8 +129,25 @@ fi
 rm -rf "$WORK/src/llama" && mkdir -p "$WORK/src/llama" "$OUT/llama"
 tar -xzf "$WORK/src/llama-$LLAMA_BUILD.tar.gz" -C "$WORK/src/llama"
 LLAMA_DIR="$(find "$WORK/src/llama" -name llama-server -type f -exec dirname {} \; | head -1)"
-# Only the server and the libraries it loads (all via @loader_path), not the CLI tools.
-cp "$LLAMA_DIR/llama-server" "$LLAMA_DIR"/*.dylib "$OUT/llama/"
+# Only the server and the libraries it loads (all via @rpath = @loader_path),
+# not the other CLI tools' libraries.
+cp "$LLAMA_DIR/llama-server" "$OUT/llama/"
+pending="$OUT/llama/llama-server"
+while [ -n "$pending" ]; do
+  next=""
+  for bin in $pending; do
+    for lib in $(otool -L "$bin" | awk '/@rpath\// { sub("@rpath/", "", $1); print $1 }'); do
+      if [ ! -e "$OUT/llama/$lib" ]; then
+        cp -P "$LLAMA_DIR/$lib" "$OUT/llama/$lib"
+        # Follow version symlinks (libggml.0.dylib -> libggml.0.28.0.dylib).
+        real="$(readlink "$LLAMA_DIR/$lib" || true)"
+        [ -n "$real" ] && cp -P "$LLAMA_DIR/$real" "$OUT/llama/$real"
+        next="$next $OUT/llama/$lib"
+      fi
+    done
+  done
+  pending="$next"
+done
 cp "$LLAMA_DIR/LICENSE" "$OUT/llama/LICENSE" 2>/dev/null || true
 "$OUT/llama/llama-server" --version 2>&1 | head -1
 
