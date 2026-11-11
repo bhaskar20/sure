@@ -413,3 +413,8 @@ details > summary {
 	cursor: pointer;
 	font-weight: 500;
 }
+
+.ai-answer {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}

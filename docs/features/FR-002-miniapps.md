@@ -209,6 +209,12 @@ No overlap with FR-001.
     schemas are the MCP server's, so a mini app's calls work against
     `/mcp` too.
   - **Logic without UI** (jobs, webhooks, QuickJS) is deferred.
+- 2026-11-11: Mini apps can use Sure's AI through an `ai:use` permission and the
+  `sure/ai/complete` bridge method. It runs on the provider Sure is set up with, so in Sure
+  Desktop with Local AI on, prompts stay on the computer. The model gets no tools, so it can
+  only see what the app puts in the prompt. The consent page says where prompts go (this
+  computer, a named cloud provider, or nowhere yet); calls are rate-limited separately
+  (20/minute) and logged by size, model and locality, never by content.
   - **Granular scopes for API keys/OAuth and an app-wide CSP** are deferred
     to a follow-up PR on this branch: mini app frames get their own strict
     CSP now; turning on an app-wide policy needs its own testing of every
@@ -359,6 +365,8 @@ None.
 - 2026-11-11: UAT run as product manager and end user with three test-instrument apps and
   three product apps (Piggy Bank, Goal Planner, Benchmark Compare). Accepted for preview;
   six defects fixed. Report: [FR-002-miniapps-uat.md](FR-002-miniapps-uat.md).
+- 2026-11-11: AI for mini apps (`ai:use`); verified end to end in Sure Desktop against the
+  bundled llama-server with Qwen3 4B. Goal Planner gained "Explain my plan".
 
 ## Handoff
 

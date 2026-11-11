@@ -33,6 +33,8 @@
     APP_DISABLED: -32004,
     CONFIRMATION_REQUIRED: -32005,
     DECLINED: -32006,
+    AI_UNAVAILABLE: -32007,
+    AI_FAILED: -32008,
     RATE_LIMITED: -32029,
     TIMEOUT: -32098,
     NOT_EMBEDDED: -32099,
@@ -292,6 +294,26 @@
       },
     };
 
+    const aiCapability = isObject(init.capabilities?.ai)
+      ? init.capabilities.ai
+      : null;
+    const ai = Object.freeze({
+      // Only set when the app holds ai:use.
+      available: Boolean(aiCapability?.available),
+      // True when prompts run on this computer (Sure Desktop's Local AI).
+      local: Boolean(aiCapability?.local),
+      model: aiCapability?.model || null,
+      complete(prompt, options) {
+        const opts = options || {};
+        return transport.request(
+          "sure/ai/complete",
+          compact({ prompt, instructions: opts.instructions }),
+          // A local model can take a minute on a long prompt.
+          { timeout: opts.timeout === undefined ? 0 : opts.timeout },
+        );
+      },
+    });
+
     return Object.freeze({
       info: init,
       protocolVersion: init.protocolVersion,
@@ -380,6 +402,7 @@
       }),
 
       storage: Object.freeze(storage),
+      ai,
 
       on(event, handler) {
         return transport.on(EVENT_ALIASES[event] || event, handler);

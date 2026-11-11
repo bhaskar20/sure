@@ -21,7 +21,9 @@ class MiniApp::Permission
     "reports:read" => %w[get_balance_sheet get_income_statement get_budget get_insights],
     "budgets:write" => %w[update_budget],
     "goals:write" => %w[create_goal],
-    "valuations:write" => %w[record_valuation set_opening_balance]
+    "valuations:write" => %w[record_valuation set_opening_balance],
+    # No tools: it unlocks the bridge's sure/ai/complete method instead.
+    "ai:use" => []
   }.freeze
 
   TOOL_PERMISSIONS = CATALOG.each_with_object({}) do |(permission, tools), map|

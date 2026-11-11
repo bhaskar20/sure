@@ -59,6 +59,10 @@ en:
       write_policy_allow: Allow without asking
       write_policy_allow_description: Granted changes go through straight away. They are still recorded in the app's activity.
       network_title: Network access
+      ai_title: AI
+      ai_local: "Prompts run on this computer with Local AI (%{model}). Nothing is sent to an AI company."
+      ai_cloud: "Prompts are sent to %{provider} (%{model}), including any of your data the app puts in them."
+      ai_unavailable: Sure has no AI model set up yet, so this app's AI features won't work until an admin sets one up.
       network_none: This app cannot contact any server outside Sure.
       network_some: "This app may contact these servers:"
       network_dev_server_title: Not restricted in dev mode

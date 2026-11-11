@@ -9,6 +9,10 @@ class MiniApp::Bridge
 
   RATE_LIMIT = 120
   RATE_LIMIT_WINDOW = 1.minute
+  # Model calls are slow and, on a cloud provider, paid, so they get a far
+  # tighter budget than data tools.
+  AI_RATE_LIMIT = 20
+  AI_PERMISSION = "ai:use"
 
   STORAGE_DEFAULT_LIMIT = 50
   STORAGE_MAX_LIMIT = 200
@@ -24,6 +28,8 @@ class MiniApp::Bridge
     APP_DISABLED = -32004
     CONFIRMATION_REQUIRED = -32005
     DECLINED = -32006
+    AI_UNAVAILABLE = -32007
+    AI_FAILED = -32008
     RATE_LIMITED = -32029
   end
 
@@ -78,6 +84,7 @@ class MiniApp::Bridge
       when "sure/storage/set" then storage_set(params)
       when "sure/storage/delete" then storage_delete(params)
       when "sure/storage/list" then storage_list(params)
+      when "sure/ai/complete" then ai_complete(params)
       else
         raise Failure.new(Codes::METHOD_NOT_FOUND, t("errors.method_not_found"))
       end
@@ -129,7 +136,7 @@ class MiniApp::Bridge
         writePolicy: mini_app.write_policy,
         user: { name: user.display_name, role: user.role },
         family: { currency: family.currency, locale: family.locale, dateFormat: family.date_format },
-        capabilities: { tools: {}, storage: {}, events: {} }
+        capabilities: { tools: {}, storage: {}, events: {}, ai: ai_capability }.compact
       }
     end
 
@@ -256,21 +263,66 @@ class MiniApp::Bridge
 
     # Counts every tools/call for this app and user. Only the first refusal in
     # a window is logged, so a looping app cannot flood its activity view.
-    def enforce_rate_limit!(tool_name)
+    def enforce_rate_limit!(tool_name, bucket: "tools", limit: RATE_LIMIT, rpc_method: "tools/call")
       window = Time.current.to_i / RATE_LIMIT_WINDOW.to_i
-      key = "mini_app_bridge:rate:#{mini_app.id}:#{user.id}:#{window}"
+      key = "mini_app_bridge:rate:#{bucket}:#{mini_app.id}:#{user.id}:#{window}"
       count = Rails.cache.increment(key, 1, expires_in: RATE_LIMIT_WINDOW * 2)
-      return if count.nil? || count <= RATE_LIMIT
+      return if count.nil? || count <= limit
 
-      log_activity(outcome: :denied, tool: tool_name, error_message: "rate_limited") if count == RATE_LIMIT + 1
-      raise Failure.new(Codes::RATE_LIMITED, t("errors.rate_limited"), { limit: RATE_LIMIT, windowSeconds: RATE_LIMIT_WINDOW.to_i })
+      log_activity(outcome: :denied, tool: tool_name, error_message: "rate_limited", rpc_method: rpc_method) if count == limit + 1
+      raise Failure.new(Codes::RATE_LIMITED, t("errors.rate_limited"), { limit: limit, windowSeconds: RATE_LIMIT_WINDOW.to_i })
     end
 
-    def log_activity(outcome:, tool: nil, permission: nil, write: false, summary: {}, error_message: nil)
+    def log_activity(outcome:, tool: nil, permission: nil, write: false, summary: {}, error_message: nil, rpc_method: "tools/call")
       MiniApp::Activity.log!(
-        mini_app: mini_app, user: user, rpc_method: "tools/call", outcome: outcome,
+        mini_app: mini_app, user: user, rpc_method: rpc_method, outcome: outcome,
         tool: tool, permission: permission, write: write, summary: summary, error_message: error_message
       )
+    end
+
+    # --- AI ----------------------------------------------------------------
+
+    # Only advertised to apps that hold ai:use, so nothing else learns which
+    # provider the instance uses.
+    def ai_capability
+      return unless effective_permissions.include?(AI_PERMISSION)
+
+      status = MiniApp::Ai.status
+      { available: status[:available], local: status[:local], model: status[:model] }
+    end
+
+    # Logged without the prompt or the reply: the activity view records that
+    # the app used AI, how much and where, not what it said.
+    def ai_complete(params)
+      rpc_method = "sure/ai/complete"
+      unless effective_permissions.include?(AI_PERMISSION)
+        log_activity(outcome: :denied, tool: "ai", permission: AI_PERMISSION, error_message: "permission_not_granted", rpc_method: rpc_method)
+        raise Failure.new(Codes::PERMISSION_DENIED, t("errors.permission_denied", permission: MiniApp::Permission.label(AI_PERMISSION)),
+                          { permission: AI_PERMISSION })
+      end
+
+      prompt = params["prompt"]
+      instructions = params["instructions"]
+      unless prompt.is_a?(String) && prompt.strip.present? && prompt.length <= MiniApp::Ai::MAX_PROMPT_LENGTH &&
+             (instructions.nil? || (instructions.is_a?(String) && instructions.length <= MiniApp::Ai::MAX_INSTRUCTIONS_LENGTH))
+        raise Failure.new(Codes::INVALID_PARAMS, t("errors.invalid_ai_params",
+                                                    prompt: MiniApp::Ai::MAX_PROMPT_LENGTH, instructions: MiniApp::Ai::MAX_INSTRUCTIONS_LENGTH))
+      end
+
+      enforce_rate_limit!("ai", bucket: "ai", limit: AI_RATE_LIMIT, rpc_method: rpc_method)
+
+      summary = { promptLength: prompt.length, instructionsLength: instructions.to_s.length }
+      result = MiniApp::Ai.new(family: mini_app.family).complete(prompt: prompt, instructions: instructions)
+      log_activity(outcome: :ok, tool: "ai", permission: AI_PERMISSION, rpc_method: rpc_method,
+                   summary: summary.merge(model: result.model, local: result.local, replyLength: result.text.length))
+      { text: result.text, model: result.model, local: result.local }
+    rescue MiniApp::Ai::Unavailable
+      log_activity(outcome: :error, tool: "ai", permission: AI_PERMISSION, error_message: "ai_unavailable", rpc_method: rpc_method)
+      raise Failure.new(Codes::AI_UNAVAILABLE, t("errors.ai_unavailable"))
+    rescue MiniApp::Ai::Failed, Provider::Error, Faraday::Error, Timeout::Error => e
+      Rails.logger.warn("[MiniApp] AI completion failed for #{mini_app.app_key}: #{e.class}: #{e.message}")
+      log_activity(outcome: :error, tool: "ai", permission: AI_PERMISSION, error_message: "ai_failed", rpc_method: rpc_method)
+      raise Failure.new(Codes::AI_FAILED, t("errors.ai_failed"))
     end
 
     # --- storage -----------------------------------------------------------

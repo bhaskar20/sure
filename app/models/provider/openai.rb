@@ -156,6 +156,17 @@ class Provider::Openai < Provider
     self.class.custom_endpoint?(@uri_base)
   end
 
+  # Whether requests stay on this computer: a custom endpoint on a loopback
+  # host, such as Sure Desktop's bundled llama-server.
+  def local_endpoint?
+    return false unless custom_provider?
+
+    host = URI.parse(@uri_base.to_s).host.to_s.downcase.delete_prefix("[").delete_suffix("]")
+    host == "localhost" || host == "::1" || host.start_with?("127.")
+  rescue URI::InvalidURIError
+    false
+  end
+
   # Token-budget knobs. Precedence: ENV > Setting > default. Defaults match
   # Ollama's historical 2048-token baseline so local small-context models work
   # out of the box. Users on larger-context cloud models can raise via ENV or

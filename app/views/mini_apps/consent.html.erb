@@ -82,6 +82,19 @@
       <% end %>
     <% end %>
 
+    <% if @ai_status %>
+      <%= render DS::Card.new(class: "gap-3") do %>
+        <h2 class="font-medium text-primary"><%= t(".ai_title") %></h2>
+        <% if !@ai_status[:available] %>
+          <%= render DS::Alert.new(message: t(".ai_unavailable"), variant: :info) %>
+        <% elsif @ai_status[:local] %>
+          <%= render DS::Alert.new(message: t(".ai_local", model: @ai_status[:model]), variant: :success) %>
+        <% else %>
+          <%= render DS::Alert.new(message: t(".ai_cloud", provider: @ai_status[:provider], model: @ai_status[:model]), variant: :warning) %>
+        <% end %>
+      <% end %>
+    <% end %>
+
     <%= render DS::Card.new(class: "gap-3") do %>
       <h2 class="font-medium text-primary"><%= t(".details_title") %></h2>
       <dl class="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm">

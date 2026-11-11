@@ -78,7 +78,8 @@
           "reports:read",
           "budgets:write",
           "goals:write",
-          "valuations:write"
+          "valuations:write",
+          "ai:use"
         ]
       }
     },
