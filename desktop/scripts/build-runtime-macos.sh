@@ -7,6 +7,8 @@
 #     app/       the Rails app with vendored gems and precompiled assets
 #     postgres/  PostgreSQL server (zonky embedded binaries: relocatable, universal)
 #     valkey/    valkey-server built from source (Redis-compatible, BSD licensed)
+#     libvips/   libvips for image variants (avatars, logos, attachment previews):
+#                sharp's prebuilt, self-contained build, as libvips.42.dylib
 #     ssl/       CA bundle for outbound HTTPS from the bundled OpenSSL
 #
 # Build on the architecture you are targeting (an Apple Silicon Mac for arm64,
@@ -30,12 +32,18 @@ OPENSSL_VERSION="${OPENSSL_VERSION:-3.5.4}"
 LIBYAML_VERSION="${LIBYAML_VERSION:-0.2.5}"
 POSTGRES_VERSION="${POSTGRES_VERSION:-17.11.0}"   # zonky artifact version
 VALKEY_VERSION="${VALKEY_VERSION:-8.1.4}"
+LIBVIPS_PACKAGE_VERSION="${LIBVIPS_PACKAGE_VERSION:-1.3.4}"  # @img/sharp-libvips-darwin-*
 
 WORK="$DESKTOP/build/runtime-macos-$ARCH"
 OUT="$DESKTOP/runtime"
 DEPS="$WORK/deps"
 JOBS="$(sysctl -n hw.ncpu)"
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-12.0}"
+# Resolve native libraries only from the static builds below, never from
+# Homebrew (CI runners have it): a gem linked to /opt/homebrew would not load
+# on machines without it.
+export PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig"
+export PKG_CONFIG_PATH="$DEPS/lib/pkgconfig"
 
 mkdir -p "$WORK/src" "$DEPS"
 rm -rf "$OUT"
@@ -103,6 +111,16 @@ tar -xzf "$WORK/src/valkey.tar.gz" -C "$WORK/src/valkey" --strip-components 1
 (cd "$WORK/src/valkey" && make -j"$JOBS" BUILD_TLS=no valkey-server)
 mkdir -p "$OUT/valkey"
 cp "$WORK/src/valkey/src/valkey-server" "$OUT/valkey/"
+
+# --- libvips -----------------------------------------------------------------
+echo "==> libvips (sharp-libvips $LIBVIPS_PACKAGE_VERSION)"
+case "$ARCH" in arm64) VIPS_PKG=darwin-arm64 ;; x86_64) VIPS_PKG=darwin-x64 ;; esac
+fetch "https://registry.npmjs.org/@img/sharp-libvips-$VIPS_PKG/-/sharp-libvips-$VIPS_PKG-$LIBVIPS_PACKAGE_VERSION.tgz" "$WORK/src/libvips.tgz"
+rm -rf "$WORK/src/libvips" && mkdir -p "$WORK/src/libvips" "$OUT/libvips"
+tar -xzf "$WORK/src/libvips.tgz" -C "$WORK/src/libvips"
+# ruby-vips dlopens "vips.42"; this single dylib also exports the glib API it needs.
+cp "$WORK"/src/libvips/package/lib/libvips-cpp.*.dylib "$OUT/libvips/libvips.42.dylib"
+cp "$WORK/src/libvips/package/versions.json" "$OUT/libvips/"
 
 # --- CA certificates ----------------------------------------------------------
 mkdir -p "$OUT/ssl"

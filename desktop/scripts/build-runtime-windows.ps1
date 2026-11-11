@@ -5,6 +5,7 @@
 #     app\       the Rails app with vendored gems and precompiled assets
 #     postgres\  PostgreSQL server (zonky embedded binaries)
 #     valkey\    valkey-server.exe + msys-2.0.dll (built by build-valkey-msys2.sh)
+#     libvips\   libvips DLLs for image variants (sharp's prebuilt Windows build)
 #     ssl\       CA bundle for outbound HTTPS
 #
 # Requirements: Windows x64, Git for Windows (bash + tar), 7-Zip on PATH, and
@@ -18,6 +19,7 @@ $Repo = Resolve-Path (Join-Path $Desktop "..")
 $RubyVersion = (Get-Content (Join-Path $Repo ".ruby-version")).Trim()
 $RubyInstallerRelease = if ($env:RUBYINSTALLER_RELEASE) { $env:RUBYINSTALLER_RELEASE } else { "$RubyVersion-1" }
 $PostgresVersion = if ($env:POSTGRES_VERSION) { $env:POSTGRES_VERSION } else { "17.11.0" }
+$SharpVersion = if ($env:SHARP_WIN32_VERSION) { $env:SHARP_WIN32_VERSION } else { "0.35.5" }  # @img/sharp-win32-x64
 
 $Work = Join-Path $Desktop "build\runtime-windows"
 $Out = Join-Path $Desktop "runtime"
@@ -91,6 +93,18 @@ foreach ($i in 1..20) {
 Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
 Write-Host "Valkey PING reply: $reply"
 if (-not $reply.StartsWith("+PONG")) { throw "bundled valkey-server.exe does not start" }
+
+# --- libvips -----------------------------------------------------------------
+Write-Host "==> libvips (sharp-win32-x64 $SharpVersion)"
+$vipsTgz = Join-Path $Work "src\sharp-win32-x64-$SharpVersion.tgz"
+Fetch "https://registry.npmjs.org/@img/sharp-win32-x64/-/sharp-win32-x64-$SharpVersion.tgz" $vipsTgz
+$vipsTmp = Join-Path $Work "vips-extract"
+if (Test-Path $vipsTmp) { Remove-Item -Recurse -Force $vipsTmp }
+New-Item -ItemType Directory -Force -Path $vipsTmp, (Join-Path $Out "libvips") | Out-Null
+tar -xzf $vipsTgz -C $vipsTmp
+# ruby-vips loads libvips-42.dll by name, so the folder goes on the app's PATH.
+Copy-Item (Join-Path $vipsTmp "package\lib\*.dll") (Join-Path $Out "libvips")
+if (-not (Test-Path (Join-Path $Out "libvips\libvips-42.dll"))) { throw "libvips-42.dll missing" }
 
 # --- CA certificates ----------------------------------------------------------
 New-Item -ItemType Directory -Force -Path (Join-Path $Out "ssl") | Out-Null

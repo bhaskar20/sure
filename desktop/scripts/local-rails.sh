@@ -33,6 +33,7 @@ export ACTIVE_STORAGE_ROOT="$DATA/storage" BOOTSNAP_CACHE_DIR="$DATA/cache/boots
 export BUNDLE_GEMFILE="$RT/app/Gemfile" BUNDLE_PATH="$RT/app/vendor/bundle" BUNDLE_DEPLOYMENT=1
 export BUNDLE_WITHOUT=development:test BUNDLE_APP_CONFIG="$RT/app/.bundle"
 export SSL_CERT_FILE="$RT/ssl/cacert.pem" PATH="$RT/ruby/bin:$PATH" LANG=en_US.UTF-8
+export DYLD_FALLBACK_LIBRARY_PATH="$RT/libvips:/usr/local/lib:/usr/lib"
 unset RUBYOPT RUBYLIB GEM_HOME GEM_PATH
 
 cd "$RT/app"

@@ -45,8 +45,8 @@ pub enum Status {
     Failed { message: String, logs: String },
 }
 
-/// Secrets and ports, generated on first launch and reused afterwards. The Rails
-/// secret also derives the Active Record encryption keys, so it must never change.
+/// Secrets and ports, generated on first launch and reused afterwards. The
+/// secrets must never change: they sign sessions and encrypt data at rest.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Secrets {
     pub secret_key_base: String,
@@ -55,6 +55,20 @@ pub struct Secrets {
     pub web_port: u16,
     pub db_port: u16,
     pub valkey_port: u16,
+    /// Active Record encryption keys. Sure encrypts provider tokens, MFA
+    /// secrets and other sensitive columns only when these are set explicitly,
+    /// so they are generated here (and added to older secrets files).
+    #[serde(default)]
+    pub encryption_primary_key: String,
+    #[serde(default)]
+    pub encryption_deterministic_key: String,
+    #[serde(default)]
+    pub encryption_key_derivation_salt: String,
+    /// Set when the keys were added to an install that already had data
+    /// written unencrypted, so those rows stay readable (Rails' documented
+    /// migration mode for turning encryption on).
+    #[serde(default)]
+    pub support_unencrypted_data: bool,
 }
 
 /// Where the bundled programs live.
@@ -80,6 +94,10 @@ impl Runtime {
     }
     pub fn app(&self) -> PathBuf {
         self.root.join("app")
+    }
+    /// libvips for Active Storage image variants (avatars, logos, previews).
+    pub fn libvips(&self) -> PathBuf {
+        self.root.join("libvips")
     }
     pub fn ca_bundle(&self) -> PathBuf {
         self.root.join("ssl").join("cacert.pem")
@@ -294,6 +312,7 @@ pub fn load_or_create_secrets(data: &DataDir) -> Result<Secrets, String> {
     let path = data.secrets();
     let existing: Option<Secrets> =
         fs::read_to_string(&path).ok().and_then(|j| serde_json::from_str(&j).ok());
+    let existing_install = existing.is_some();
     let mut secrets = match existing {
         Some(s) => s,
         None => Secrets {
@@ -303,8 +322,24 @@ pub fn load_or_create_secrets(data: &DataDir) -> Result<Secrets, String> {
             web_port: 0,
             db_port: 0,
             valkey_port: 0,
+            encryption_primary_key: String::new(),
+            encryption_deterministic_key: String::new(),
+            encryption_key_derivation_salt: String::new(),
+            support_unencrypted_data: false,
         },
     };
+    if existing_install && secrets.encryption_primary_key.is_empty() {
+        secrets.support_unencrypted_data = true;
+    }
+    for key in [
+        &mut secrets.encryption_primary_key,
+        &mut secrets.encryption_deterministic_key,
+        &mut secrets.encryption_key_derivation_salt,
+    ] {
+        if key.is_empty() {
+            *key = random_hex(32)?;
+        }
+    }
     // Keep the same ports across launches when they are still free (stable
     // origin for the webview), and move to a free one otherwise.
     let mut taken = Vec::new();
@@ -373,6 +408,13 @@ pub fn rails_env(rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Vec<(String
         ("SURE_DESKTOP", "1".into()),
         ("SELF_HOSTED", "true".into()),
         ("SECRET_KEY_BASE", secrets.secret_key_base.clone()),
+        ("ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY", secrets.encryption_primary_key.clone()),
+        ("ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY", secrets.encryption_deterministic_key.clone()),
+        ("ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT", secrets.encryption_key_derivation_salt.clone()),
+        (
+            "ACTIVE_RECORD_ENCRYPTION_SUPPORT_UNENCRYPTED_DATA",
+            secrets.support_unencrypted_data.to_string(),
+        ),
         ("DB_HOST", "127.0.0.1".into()),
         ("DB_PORT", secrets.db_port.to_string()),
         ("POSTGRES_USER", DB_USER.into()),
@@ -407,7 +449,14 @@ pub fn rails_env(rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Vec<(String
     let ruby_bin = rt.ruby().parent().map(Path::to_path_buf).unwrap_or_default();
     let sep = if cfg!(windows) { ";" } else { ":" };
     let path = std::env::var("PATH").unwrap_or_default();
-    env.push(("PATH", format!("{}{sep}{path}", ruby_bin.display())));
+    // ruby-vips dlopens libvips by name: Windows searches PATH for DLLs, macOS
+    // the fallback library path (allowed by the runtime's entitlements).
+    if cfg!(windows) {
+        env.push(("PATH", format!("{}{sep}{}{sep}{path}", ruby_bin.display(), rt.libvips().display())));
+    } else {
+        env.push(("PATH", format!("{}{sep}{path}", ruby_bin.display())));
+        env.push(("DYLD_FALLBACK_LIBRARY_PATH", format!("{}{sep}/usr/local/lib{sep}/usr/lib", rt.libvips().display())));
+    }
     env.into_iter().map(|(k, v)| (k.to_string(), v)).collect()
 }
 
