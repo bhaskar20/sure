@@ -10,7 +10,7 @@ handoff notes.
 | ID | Feature | Status | Priority | Owner | Depends on | Spec |
 | --- | --- | --- | --- | --- | --- | --- |
 | FR-001 | Local coding harness for changing Sure itself | Proposed | P1 | — | — | [spec](FR-001-local-coding-harness.md) |
-| FR-002 | Mini apps: plug-in apps with their own UI and data access | Proposed | P1 | — | — | [spec](FR-002-miniapps.md) |
+| FR-002 | Mini apps: plug-in apps with their own UI and data access | In progress | P1 | claude-fr-002 | — | [spec](FR-002-miniapps.md) |
 | FR-003 | Extract any supported data from an uploaded PDF | Proposed | P1 | — | — | [spec](FR-003-pdf-document-extraction.md) |
 
 ## Statuses
