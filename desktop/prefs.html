@@ -25,34 +25,9 @@
         <label id="autostart-label" for="autostart"></label>
         <input type="checkbox" id="autostart" />
       </section>
-      <section id="ai" class="hidden">
+      <section>
         <h2 id="ai-title"></h2>
-        <p id="ai-intro" class="ai-note"></p>
-        <div class="row ai-toggle">
-          <label id="ai-enabled-label" for="ai-enabled"></label>
-          <input type="checkbox" id="ai-enabled" />
-        </div>
-        <p id="ai-server" class="status" role="status"></p>
-        <ul id="ai-models"></ul>
-        <div class="row ai-context">
-          <label id="ai-context-label" for="ai-context"></label>
-          <select id="ai-context">
-            <option value="32768">32K</option>
-            <option value="65536">64K</option>
-          </select>
-        </div>
-        <h3 id="ai-custom-title"></h3>
-        <form id="ai-custom" class="ai-custom">
-          <div class="form-field"><input class="form-field__input" id="ai-custom-name" type="text" autocomplete="off" /></div>
-          <div class="form-field"><input class="form-field__input" id="ai-custom-source" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" /></div>
-          <button type="submit" id="ai-custom-add" class="btn-primary"></button>
-        </form>
-        <p id="ai-status" class="status" role="status"></p>
-        <p id="ai-folder" class="ai-note"></p>
-      </section>
-      <section id="ai-unavailable" class="hidden">
-        <h2 id="ai-title-2"></h2>
-        <p id="ai-unavailable-text" class="ai-note"></p>
+        <p id="ai-moved" class="ai-note"></p>
       </section>
     </main>
     <script type="module" src="/src/prefs.ts"></script>

@@ -1,0 +1,45 @@
+---
+en:
+  settings:
+    local_ais:
+      show:
+        page_title: Local AI
+        title: Status
+        subtitle: Run an AI model on this computer for the assistant and auto-categorization. Nothing is sent online; models are downloaded once.
+        unavailable: Local AI is managed by the Sure Desktop app and isn't available in this window.
+        enable: Use a local AI model
+        status:
+          "off": Off. Sure uses the AI provider set under Self-Hosting, if any.
+          no_model: Choose or download a model below.
+          starting: Loading %{name}…
+          running: Running %{name}.
+          failed: "The model stopped: %{message}"
+        context:
+          label: Context size
+          hint: The assistant needs at least 32K tokens. Larger uses more memory.
+          options:
+            32k: 32K tokens
+            64k: 64K tokens
+        models:
+          title: Models
+          subtitle: Qwen3 4B Instruct is the best balance for most computers.
+          recommended: Recommended
+          custom: Custom
+        custom:
+          title: Add a model
+          subtitle: Any GGUF model, by HTTPS link or a file on this computer.
+          name: Name
+          source: Link or file path
+          source_placeholder: https://… or /path/to/model.gguf
+          add: Add model
+        actions:
+          download: Download
+          use: Use
+          in_use: In use
+          delete: Delete
+          confirm_delete: Confirm delete
+          cancel: Cancel
+          dismiss: Dismiss
+        downloading: Downloading… %{received} of %{total}
+        memory: "~%{gb} GB memory"
+        folder: Models are stored in %{path}

@@ -17,6 +17,7 @@ en:
       imports_label: Imports
       exports_label: Exports
       llm_usage_label: LLM Usage
+      local_ai_label: Local AI
       logout: Logout
       merchants_label: Merchants
       providers_label: Providers

@@ -2,7 +2,7 @@ module SelfHostable
   extend ActiveSupport::Concern
 
   included do
-    helper_method :self_hosted?, :self_hosted_first_login?
+    helper_method :self_hosted?, :self_hosted_first_login?, :sure_desktop?
 
     prepend_before_action :verify_self_host_config
   end
@@ -10,6 +10,12 @@ module SelfHostable
   private
     def self_hosted?
       Rails.configuration.app_mode.self_hosted?
+    end
+
+    # Running inside the Sure Desktop app, which supervises this server and
+    # exposes desktop-only settings (such as Local AI) to its window.
+    def sure_desktop?
+      self_hosted? && ENV["SURE_DESKTOP"] == "1"
     end
 
     def self_hosted_first_login?
