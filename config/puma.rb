@@ -71,6 +71,9 @@ if ENV["SURE_DESKTOP"] == "1"
     desktop_sidekiq = Sidekiq.configure_embed do |config|
       config.queues = %w[scheduled,10 high_priority,4 medium_priority,2 low_priority,1 default,1]
       config.concurrency = Integer(ENV.fetch("SIDEKIQ_CONCURRENCY") { 2 })
+      # Jobs still running when Sure quits are pushed back to the queue after
+      # this many seconds; it must end before the launcher's 15s hard stop.
+      config[:timeout] = 8
       config.capsule("ai") do |cap|
         cap.concurrency = 1
         cap.queues = %w[ai_high_priority ai_low_priority]
@@ -78,7 +81,10 @@ if ENV["SURE_DESKTOP"] == "1"
     end
     desktop_sidekiq.run
   end
-  stop_sidekiq = -> { desktop_sidekiq&.stop }
+  # Puma runs after_stopped from its SIGTERM handler, where Ruby forbids the
+  # mutexes Sidekiq's shutdown takes ("can't be called from trap context").
+  # Stop it on its own thread so in-flight jobs are pushed back to the queue.
+  stop_sidekiq = -> { Thread.new { desktop_sidekiq&.stop }.join }
 
   # Puma 7 renamed on_booted/on_stopped; keep working on either name.
   respond_to?(:after_booted) ? after_booted(&start_sidekiq) : on_booted(&start_sidekiq)
