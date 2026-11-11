@@ -91,6 +91,18 @@ class MiniAppsControllerTest < ActionDispatch::IntegrationTest
     assert_no_match "cannot contact any server outside Sure", response.body
   end
 
+  test "consent says where AI prompts go for an app that asks for ai:use" do
+    @mini_app.update!(manifest: @mini_app.manifest.merge("permissions" => @mini_app.manifest["permissions"] + [ "ai:use" ]))
+
+    MiniApp::Ai.stubs(:status).returns({ available: true, local: true, provider: "Local", model: "sure-local" })
+    get consent_mini_app_url(@mini_app)
+    assert_select "div", text: /run on this computer with Local AI \(sure-local\)/
+
+    MiniApp::Ai.stubs(:status).returns({ available: true, local: false, provider: "OpenAI", model: "gpt-4.1" })
+    get consent_mini_app_url(@mini_app)
+    assert_select "div", text: /sent to OpenAI \(gpt-4\.1\)/
+  end
+
   test "consent says a bundle without network origins is offline" do
     get consent_mini_app_url(@mini_app)
 

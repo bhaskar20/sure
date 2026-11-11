@@ -38,7 +38,10 @@ en:
           linked_account_names: Funding accounts
           type: Type
       errors:
+        ai_failed: The AI model could not answer. Try again in a moment.
+        ai_unavailable: Sure has no AI model set up. An admin can set one up in Settings (or turn on Local AI in Sure Desktop).
         app_disabled: This app is disabled.
+        invalid_ai_params: "Send a prompt of up to %{prompt} characters, with optional instructions of up to %{instructions} characters."
         confirmation_required: This change needs your confirmation.
         declined: You declined this change.
         invalid_collection: Collection names use lowercase letters, numbers, dashes and underscores (up to 64 characters).

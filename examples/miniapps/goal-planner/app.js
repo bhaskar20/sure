@@ -442,6 +442,7 @@ function render() {
 	renderSummary(priorities);
 	renderGoals(plans);
 	renderPriorities(priorities, plans);
+	renderAi();
 	renderAccounts();
 	renderAssumptions();
 }
@@ -949,6 +950,86 @@ function renderPriorities(priorities, plans) {
 	);
 }
 
+// ---------------------------------------------------------------------------
+// AI explanation (ai:use)
+// ---------------------------------------------------------------------------
+
+const AI_INSTRUCTIONS =
+	"You are a friendly, plain-spoken financial coach. Explain the person's goal plan in at most five short sentences: whether it holds together, the biggest risk, and one practical next step. Use only the numbers given. Do not recommend specific funds, stocks or products, and do not promise returns.";
+
+function renderAi() {
+	const ai = state.sure?.ai;
+	const section = $("ai-section");
+	section.hidden = !can("ai:use") || state.goals.length === 0;
+	if (section.hidden) return;
+
+	const button = $("ai-explain");
+	if (!ai.available) {
+		$("ai-where").textContent =
+			"Sure has no AI model set up yet. An admin can turn on Local AI in Sure Desktop or set up a provider in Settings.";
+		button.disabled = true;
+		return;
+	}
+	$("ai-where").textContent = ai.local
+		? `Runs on this computer with ${ai.model}. Your plan does not leave this machine.`
+		: `Your plan summary is sent to Sure's AI provider (${ai.model}).`;
+	button.disabled = state.aiBusy === true;
+}
+
+function planSummaryForAi() {
+	const { plans, priorities } = buildPlans();
+	return {
+		currency: state.currency,
+		monthlySurplus: state.surplus,
+		goals: state.goals.map((goal) => {
+			const plan = plans[goal.id];
+			const row = priorities.rows.find((r) => r.id === goal.id);
+			return {
+				name: goal.name,
+				kind: goal.kind,
+				priority: goal.priority,
+				targetDate: goal.targetDate,
+				targetTodayMoney: Math.round(plan.target),
+				targetAtDate: Math.round(plan.futureTarget),
+				earmarkedNow: Math.round(plan.currentValue),
+				neededPerMonth: plan.requiredMonthly === null ? null : Math.round(plan.requiredMonthly),
+				assignedPerMonth: Math.round(row.allocated),
+				fitsSurplus: row.fits,
+				status: plan.status,
+				assetMix: plan.mix,
+				assumedAnnualReturn: Number(plan.annualReturn.toFixed(3)),
+			};
+		}),
+	};
+}
+
+async function explainPlan() {
+	const answer = $("ai-answer");
+	state.aiBusy = true;
+	renderAi();
+	answer.hidden = false;
+	answer.textContent = state.sure.ai.local
+		? "Thinking on this computer… a local model can take up to a minute."
+		: "Thinking…";
+	try {
+		const result = await state.sure.ai.complete(
+			`Here is my goal plan as JSON:\n${JSON.stringify(planSummaryForAi())}`,
+			{ instructions: AI_INSTRUCTIONS },
+		);
+		answer.textContent = result.text || "The model returned no answer.";
+	} catch (error) {
+		answer.textContent =
+			error?.code === -32007
+				? "Sure has no AI model set up yet."
+				: error?.code === -32003
+					? "This app has not been given permission to use Sure's AI."
+					: "The AI model could not answer. Try again in a moment.";
+	} finally {
+		state.aiBusy = false;
+		renderAi();
+	}
+}
+
 function renderAccounts() {
 	const section = $("accounts-section");
 	section.hidden = !can("accounts:read");
@@ -1344,6 +1425,7 @@ async function main() {
 	$("goal-form").addEventListener("submit", submitGoal);
 	$("assumptions-form").addEventListener("submit", saveAssumptions);
 	$("assumptions-reset").addEventListener("click", resetAssumptions);
+	$("ai-explain").addEventListener("click", explainPlan);
 
 	// create_goal changes what accounts have free; Sure tells us after writes.
 	state.sure.on("dataChanged", scheduleRefresh);

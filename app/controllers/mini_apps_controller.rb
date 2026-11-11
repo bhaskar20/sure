@@ -33,6 +33,7 @@ class MiniAppsController < ApplicationController
 
   def consent
     @requested_permissions = @mini_app.requested_permissions
+    @ai_status = MiniApp::Ai.status if @requested_permissions.include?(MiniApp::Bridge::AI_PERMISSION)
   end
 
   def update

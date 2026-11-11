@@ -96,6 +96,7 @@ grant any subset.
 | `budgets:write` | `update_budget` |
 | `goals:write` | `create_goal` |
 | `valuations:write` | `record_valuation`, `set_opening_balance` |
+| `ai:use` | No tools: unlocks `sure/ai/complete` (see [AI](#ai)) |
 
 A tool is callable only when it is in this table and also available to the
 person in Sure (some tools depend on configuration). `tools/list` returns
@@ -160,13 +161,14 @@ methods live under `sure/` and `notifications/sure/`.
 
 | Method | Params | Result |
 | --- | --- | --- |
-| `ui/initialize` | `{ protocolVersion, clientInfo, appCapabilities }` | `{ protocolVersion: "2026-11-11", bridgeVersion: 1, hostInfo: { name: "Sure" }, app: { id, name, version }, permissions, writePolicy, user: { name, role }, family: { currency, locale, dateFormat }, capabilities: { tools, storage, events } }` |
+| `ui/initialize` | `{ protocolVersion, clientInfo, appCapabilities }` | `{ protocolVersion: "2026-11-11", bridgeVersion: 1, hostInfo: { name: "Sure" }, app: { id, name, version }, permissions, writePolicy, user: { name, role }, family: { currency, locale, dateFormat }, capabilities: { tools, storage, events, ai? } }`. `ai: { available, local, model }` appears only for apps holding `ai:use`. |
 | `tools/list` | `{}` | `{ tools: [{ name, description, inputSchema, permission, write }] }`, only the callable tools |
 | `tools/call` | `{ name, arguments }` | `{ content: [{ type: "text", text }], structuredContent }`. When the tool raises: `isError: true` with a generic message. |
 | `sure/storage/get` | `{ collection, key }` | The record's `{ key, data, updatedAt }`, or no `data` when absent |
 | `sure/storage/set` | `{ collection, key, data }` | The saved record |
 | `sure/storage/delete` | `{ collection, key }` | Confirmation |
 | `sure/storage/list` | `{ collection, prefix?, limit? (≤ 200), cursor? }` | `{ items: [{ key, data, updatedAt }], nextCursor }` |
+| `sure/ai/complete` | `{ prompt, instructions? }` | `{ text, model, local }`. Needs `ai:use`. |
 | `ping` | `{}` | `{}` |
 
 Tools report expected failures (not found, validation) inside a normal result
@@ -189,7 +191,9 @@ as `{ success: false, error, message }`. Check `success` on write results.
 | `-32004` | `APP_DISABLED` | An admin disabled the app. |
 | `-32005` | `CONFIRMATION_REQUIRED` | Handled by Sure: it asks the person and retries. Apps do not see it. `data: { tool, permission, summary, details: [{ label, value }] }`. |
 | `-32006` | `DECLINED` | The person declined the write in Sure's dialog. |
-| `-32029` | `RATE_LIMITED` | More than 120 tool calls per minute for this app and person. |
+| `-32007` | `AI_UNAVAILABLE` | `ai:use` is granted, but Sure has no AI model set up. |
+| `-32008` | `AI_FAILED` | The model failed or timed out. Try again. |
+| `-32029` | `RATE_LIMITED` | More than 120 tool calls, or 20 AI completions, per minute for this app and person. |
 | `-32000` | `TOOL_ERROR` | SDK only: the tool raised (`isError: true`). |
 | `-32098` | `TIMEOUT` | SDK only: a non-tool request got no answer in 30 s. |
 | `-32099` | `NOT_EMBEDDED` | SDK only: the page is not running inside Sure. |
@@ -261,6 +265,32 @@ Each app has its own store, separate from every other app and family.
   there is no compare-and-set yet.
 - Values round-trip, but object key order does not (storage is `jsonb`).
   Compare stored objects by value, not by `JSON.stringify`.
+
+## AI
+
+With `ai:use`, an app can ask the AI model Sure is set up with:
+
+```js
+if (sure.ai.available) {
+  const { text, local } = await sure.ai.complete(
+    `Explain this savings plan in two sentences: ${JSON.stringify(plan)}`,
+    { instructions: "You are a friendly financial coach. No advice on specific securities." },
+  );
+}
+```
+
+- **Which model.** Sure's own: in Sure Desktop with Local AI on, the model
+  running on the computer (`sure.ai.local` is `true` and nothing leaves the
+  machine); otherwise the provider an admin set up in Settings. The consent
+  page tells the admin which, before they grant `ai:use`.
+- **No tools.** The model cannot read or change data. It sees only your prompt,
+  so it can only see data your other permissions let you read. With a cloud
+  provider, whatever you put in the prompt leaves Sure: say so in your UI.
+- **Limits.** Prompt up to 20,000 characters, instructions up to 4,000, 20
+  completions per minute. Answers can take a minute on a local model, so
+  `complete` has no timeout by default; show progress.
+- **On the record.** Each call is listed in the app's activity with its size,
+  model and whether it ran locally. The prompt and the answer are not stored.
 
 ## Building the UI
 

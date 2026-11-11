@@ -75,6 +75,9 @@ en:
       transactions_read:
         label: Read transactions
         description: See transactions, recurring transactions and possible transfer matches.
+      ai_use:
+        label: Use Sure's AI
+        description: Send prompts to the AI model Sure is set up with. The model can't read or change your data itself; it only sees what this app puts in the prompt.
       transactions_write:
         label: Change transactions
         description: Create, edit and delete transactions, and match or unmatch transfers.

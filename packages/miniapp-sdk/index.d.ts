@@ -22,7 +22,8 @@ export type Permission =
   | "reports:read"
   | "budgets:write"
   | "goals:write"
-  | "valuations:write";
+  | "valuations:write"
+  | "ai:use";
 
 export type WritePolicy = "confirm" | "allow";
 
@@ -43,7 +44,11 @@ export declare const ErrorCodes: Readonly<{
   CONFIRMATION_REQUIRED: -32005;
   /** The person declined the write in Sure's confirmation dialog. */
   DECLINED: -32006;
-  /** More than 120 tool calls per minute for this app and user. */
+  /** `ai:use` is granted but Sure has no AI model set up. */
+  AI_UNAVAILABLE: -32007;
+  /** The AI model failed or timed out; try again. */
+  AI_FAILED: -32008;
+  /** More than 120 tool calls (or 20 AI completions) per minute for this app and user. */
   RATE_LIMITED: -32029;
   /** SDK-side: a non-tool request got no answer within its timeout. */
   TIMEOUT: -32098;
@@ -82,7 +87,38 @@ export interface InitializeResult {
   writePolicy: WritePolicy;
   user: { name: string; role: string };
   family: { currency: string; locale: string; dateFormat: string };
-  capabilities: { tools?: object; storage?: object; events?: object };
+  capabilities: {
+    tools?: object;
+    storage?: object;
+    events?: object;
+    /** Present only when the app holds `ai:use`. */
+    ai?: AiCapability;
+  };
+}
+
+export interface AiCapability {
+  /** Whether Sure has an AI model set up. */
+  available: boolean;
+  /** True when prompts run on this computer (Sure Desktop's Local AI). */
+  local: boolean;
+  model: string | null;
+}
+
+export interface AiCompletion {
+  text: string;
+  model: string;
+  /** True when the answer came from a model on this computer. */
+  local: boolean;
+}
+
+/**
+ * Sure's own AI model (`ai:use`). The model has no tools: it sees only what
+ * you put in the prompt. Limits: prompt 20,000 characters, instructions 4,000,
+ * 20 completions per minute.
+ */
+export interface AiApi extends AiCapability {
+  /** No timeout by default: a local model can take a minute on a long prompt. */
+  complete(prompt: string, options?: { instructions?: string; timeout?: number }): Promise<AiCompletion>;
 }
 
 export interface ToolDescriptor {
@@ -721,6 +757,7 @@ export interface SureMiniAppClient {
   };
 
   storage: StorageApi;
+  ai: AiApi;
 
   /** Fires after a successful write by this app (`notifications/sure/data_changed`). */
   on(event: "dataChanged", handler: (event: DataChangedEvent) => void): () => void;
