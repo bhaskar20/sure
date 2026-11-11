@@ -31,6 +31,12 @@ en:
           new_name: New name
           notes: Notes
           currency: Currency
+          external_id: App reference
+          source: Recorded by
+          target_amount: Target amount
+          target_date: Target date
+          linked_account_names: Funding accounts
+          type: Type
       errors:
         app_disabled: This app is disabled.
         confirmation_required: This change needs your confirmation.

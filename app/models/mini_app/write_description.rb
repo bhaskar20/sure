@@ -21,6 +21,9 @@ class MiniApp::WriteDescription
     "rule_id" => :rule
   }.freeze
 
+  # Plain amounts the person should read as money, not as bare numbers.
+  MONEY_ARGUMENTS = %w[amount target_amount balance value].freeze
+
   # What a bare `id` argument refers to, by tool.
   SUBJECTS = {
     "update_transaction" => :transaction,
@@ -64,7 +67,11 @@ class MiniApp::WriteDescription
 
     def describe(name, value)
       kind = reference_kind(name)
-      text = kind ? describe_reference(kind, value) : describe_value(value)
+      text =
+        if kind then describe_reference(kind, value)
+        elsif MONEY_ARGUMENTS.include?(name) then describe_money(value)
+        else describe_value(value)
+        end
       text.to_s.truncate(MAX_VALUE_LENGTH)
     end
 
@@ -110,9 +117,26 @@ class MiniApp::WriteDescription
       case value
       when true then t("yes")
       when false then t("no")
-      when Hash, Array then value.to_json
+      when Array then value.all? { |item| item.is_a?(String) || item.is_a?(Numeric) } ? value.join(", ") : value.to_json
+      when Hash then value.to_json
       else value.to_s
       end
+    end
+
+    def describe_money(value)
+      amount = BigDecimal(value.to_s, exception: false)
+      return describe_value(value) unless amount
+
+      Money.new(amount, money_currency).format
+    rescue ArgumentError
+      describe_value(value)
+    end
+
+    # The call's own currency, else the account it writes to, else the family's.
+    def money_currency
+      @money_currency ||= arguments["currency"].presence ||
+        (UuidFormat.valid?(arguments["account_id"].to_s) && find_reference(:account, arguments["account_id"].to_s)&.currency) ||
+        family.currency
     end
 
     def not_found(id)

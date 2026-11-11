@@ -150,7 +150,7 @@ class MiniApp::BridgeTest < ActiveSupport::TestCase
     assert_match @transaction.entry.name, by_label["Transaction"][:value]
     assert_match "(not found)", by_label["Category"][:value]
     assert_equal "not-a-uuid (not found)", by_label["Tags"][:value]
-    assert_equal "999999", by_label["Amount"][:value]
+    assert_equal Money.new(999_999, @admin.family.currency).format, by_label["Amount"][:value]
     assert_operator by_label["Notes"][:value].length, :<=, MiniApp::WriteDescription::MAX_VALUE_LENGTH
     assert_equal %w[Transaction Category Tags Amount Notes], details.map { |line| line[:label] }
   end
