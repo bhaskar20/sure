@@ -85,7 +85,9 @@ fn dump_logs(data: &DataDir) {
         eprintln!("----- {} (error lines) -----", f.display());
         let errors = text.lines().filter(|l| {
             !l.trim_start().starts_with("from ") && !l.contains(".rb:") && !l.contains("does not exist")
-                && ["Error", "error:", "aborted", "FATAL", "ERROR", "No such"].iter().any(|k| l.contains(k))
+                && ["Error", "error:", "aborted", "FATAL", "ERROR", "No such", "Caused by", "PG::", "failed", "connection"]
+                    .iter()
+                    .any(|k| l.contains(k))
         });
         for line in errors.take(30) {
             eprintln!("{line}");

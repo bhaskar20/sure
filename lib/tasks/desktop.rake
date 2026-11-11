@@ -35,7 +35,9 @@ namespace :desktop do
   # Test accounts plus a large demo family for Sure Desktop development:
   #   desktop-tester@example.com / dev-member@example.com  (password: DEV_PASSWORD)
   #     one household: checking + credit card, categories, ~2 months of
-  #     transactions and a categorization rule
+  #     transactions and a categorization rule. The tester is a super admin, so
+  #     instance-wide settings (Self-Hosting, Local AI) work with several
+  #     households in the dev data.
   #   user@example.com / Password1!  (+ partner_user@example.com)
   #     Sure's full demo dataset (demo_data:default)
   # Safe to re-run: existing accounts are left as they are.
@@ -68,7 +70,7 @@ namespace :desktop do
     puts <<~MSG
 
       Sign in with:
-        #{DEV_TESTER_EMAIL} / #{DEV_PASSWORD}   (admin, small household)
+        #{DEV_TESTER_EMAIL} / #{DEV_PASSWORD}   (super admin, small household)
         #{DEV_MEMBER_EMAIL} / #{DEV_PASSWORD}   (member of the same household)
     MSG
     puts "  #{demo_email} / Password1!   (demo family, lots of data)" if demo_email
@@ -79,7 +81,7 @@ namespace :desktop do
       family = Family.create!(name: "Desk Tester", currency: "USD", locale: "en", country: "US",
                               timezone: "America/New_York", date_format: "%m-%d-%Y")
       [
-        [ DEV_TESTER_EMAIL, "Desk", "Tester", "admin" ],
+        [ DEV_TESTER_EMAIL, "Desk", "Tester", "super_admin" ],
         [ DEV_MEMBER_EMAIL, "Dev", "Member", "member" ]
       ].each do |email, first, last, role|
         user = family.users.create!(email: email, first_name: first, last_name: last, role: role,

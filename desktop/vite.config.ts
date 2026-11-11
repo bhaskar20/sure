@@ -8,7 +8,13 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  server: {
+    port: 1420,
+    strictPort: true,
+    // The bundled runtime and native build folders hold thousands of files
+    // (gems, PostgreSQL, Rust output) that are not part of this frontend.
+    watch: { ignored: ["**/runtime/**", "**/build/**", "**/src-tauri/**"] },
+  },
   build: {
     target: "safari15",
     outDir: "dist",
