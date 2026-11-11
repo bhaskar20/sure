@@ -3,8 +3,16 @@ name: Desktop (local-only) Build
 # Builds Sure Desktop with everything bundled — Ruby, the Rails app, PostgreSQL
 # and Valkey — so it runs with no server: a .dmg per Mac architecture and a
 # Windows installer (.exe). All user data stays in the app's local data folder.
+# Mac builds are made locally (see desktop/README.md: npm run runtime:mac /
+# build:mac); CI builds them only when a manual run asks for it. Windows,
+# which can't be built on a Mac, builds on every run.
 on:
   workflow_dispatch:
+    inputs:
+      macos:
+        description: "Also build the macOS DMGs"
+        type: boolean
+        default: false
   push:
     tags: ["desktop-v*"]
 
@@ -14,6 +22,7 @@ permissions:
 jobs:
   macos:
     name: macOS ${{ matrix.arch }}
+    if: github.event_name == 'workflow_dispatch' && inputs.macos
     strategy:
       fail-fast: false
       matrix:

@@ -51,14 +51,59 @@ export PKG_CONFIG_LIBDIR="$DEPS/lib/pkgconfig"
 export PKG_CONFIG_PATH="$DEPS/lib/pkgconfig"
 
 mkdir -p "$WORK/src" "$DEPS"
-rm -rf "$OUT"
-mkdir -p "$OUT"
 
 fetch() { # url dest — downloads are cached in $WORK/src between runs
   [ -f "$2" ] && return 0
   curl --fail --location --retry 3 -o "$2.part" "$1"
   mv "$2.part" "$2"
 }
+
+# Stage the Rails app with the bundled Ruby, check its native extensions and
+# sign everything. The last step of a full build, and all of --app-only.
+finish_runtime() {
+  # --- Rails app ----------------------------------------------------------------
+  BUNDLE_BUILD_FLAGS="puma=--with-openssl-dir=$DEPS
+psych=--with-libyaml-dir=$DEPS" \
+    "$DESKTOP/scripts/stage-app.sh" "$OUT/ruby/bin" "$OUT/app" "$GEM_PLATFORM"
+
+  # Native extensions must not reference libraries outside the bundle either.
+  bad=0
+  while IFS= read -r -d '' f; do
+    if otool -L "$f" | tail -n +2 | grep -vE '^\s+(/usr/lib|/System|@rpath|@loader_path)' >/dev/null; then
+      echo "external library reference in $f:"; otool -L "$f" | tail -n +2; bad=1
+    fi
+  done < <(find "$OUT/app/vendor/bundle" -type f -name '*.bundle' -print0)
+  [ "$bad" = 0 ] || exit 1
+
+  # --- Signing ------------------------------------------------------------------
+  # Tauri signs the app bundle itself; the executables inside Resources must be
+  # signed individually for notarization (hardened runtime + entitlements Ruby's
+  # JIT and extension loading need).
+  if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
+    echo "==> Signing bundled executables"
+    find "$OUT" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.bundle' -o -name '*.so' \) -print0 \
+      | while IFS= read -r -d '' f; do
+          if file "$f" | grep -q 'Mach-O'; then
+            codesign --force --timestamp --options runtime \
+              --entitlements "$DESKTOP/src-tauri/runtime.entitlements" \
+              --sign "$APPLE_SIGNING_IDENTITY" "$f"
+          fi
+        done
+  fi
+
+  echo "==> Runtime ready: $OUT ($(du -sh "$OUT" | cut -f1))"
+}
+
+# --app-only: re-stage just the Rails app into an existing runtime (for Rails
+# code changes; Ruby, PostgreSQL, Valkey and llama stay): ~2 min instead of ~15.
+if [ "${1:-}" = "--app-only" ]; then
+  [ -x "$OUT/ruby/bin/ruby" ] || { echo "No runtime in $OUT yet: run without --app-only first." >&2; exit 1; }
+  finish_runtime
+  exit 0
+fi
+
+rm -rf "$OUT"
+mkdir -p "$OUT"
 
 # --- OpenSSL (static) -------------------------------------------------------
 if [ ! -f "$DEPS/lib/libssl.a" ]; then
@@ -166,34 +211,4 @@ mkdir -p "$OUT/ssl"
 fetch "https://curl.se/ca/cacert.pem" "$WORK/src/cacert.pem"
 cp "$WORK/src/cacert.pem" "$OUT/ssl/cacert.pem"
 
-# --- Rails app ----------------------------------------------------------------
-BUNDLE_BUILD_FLAGS="puma=--with-openssl-dir=$DEPS
-psych=--with-libyaml-dir=$DEPS" \
-  "$DESKTOP/scripts/stage-app.sh" "$OUT/ruby/bin" "$OUT/app" "$GEM_PLATFORM"
-
-# Native extensions must not reference libraries outside the bundle either.
-bad=0
-while IFS= read -r -d '' f; do
-  if otool -L "$f" | tail -n +2 | grep -vE '^\s+(/usr/lib|/System|@rpath|@loader_path)' >/dev/null; then
-    echo "external library reference in $f:"; otool -L "$f" | tail -n +2; bad=1
-  fi
-done < <(find "$OUT/app/vendor/bundle" -type f -name '*.bundle' -print0)
-[ "$bad" = 0 ] || exit 1
-
-# --- Signing ------------------------------------------------------------------
-# Tauri signs the app bundle itself; the executables inside Resources must be
-# signed individually for notarization (hardened runtime + entitlements Ruby's
-# JIT and extension loading need).
-if [ -n "${APPLE_SIGNING_IDENTITY:-}" ]; then
-  echo "==> Signing bundled executables"
-  find "$OUT" -type f \( -perm -u+x -o -name '*.dylib' -o -name '*.bundle' -o -name '*.so' \) -print0 \
-    | while IFS= read -r -d '' f; do
-        if file "$f" | grep -q 'Mach-O'; then
-          codesign --force --timestamp --options runtime \
-            --entitlements "$DESKTOP/src-tauri/runtime.entitlements" \
-            --sign "$APPLE_SIGNING_IDENTITY" "$f"
-        fi
-      done
-fi
-
-echo "==> Runtime ready: $OUT ($(du -sh "$OUT" | cut -f1))"
+finish_runtime
