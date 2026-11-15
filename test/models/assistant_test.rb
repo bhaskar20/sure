@@ -21,10 +21,13 @@ class AssistantTest < ActiveSupport::TestCase
 
   test "guest registry leaves out the tools that change categories and tags" do
     guest_classes = Assistant.function_classes(family_guest)
+    # Some of these tools are preview-only, so compare with a preview admin.
+    admin = users(:family_admin)
+    admin.update!(preferences: (admin.preferences || {}).merge("preview_features_enabled" => true))
 
     Assistant::FAMILY_CONFIG_FUNCTION_CLASSES.each do |fn_class|
       assert_not_includes guest_classes, fn_class
-      assert_includes Assistant.function_classes(users(:family_admin)), fn_class
+      assert_includes Assistant.function_classes(admin), fn_class
     end
     assert_includes guest_classes, Assistant::Function::GetCategories
   end

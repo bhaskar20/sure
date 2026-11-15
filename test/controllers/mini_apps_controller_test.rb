@@ -55,6 +55,8 @@ class MiniAppsControllerTest < ActionDispatch::IntegrationTest
     assert_not_nil @mini_app.reload.last_opened_at
 
     assert_select "[data-controller='mini-app-host'][data-mini-app-host-bridge-url-value='#{bridge_mini_app_path(@mini_app)}']"
+    # A sync's morph refresh must not swap the frame URL and reload the app.
+    assert_select "##{ActionView::RecordIdentifier.dom_id(@mini_app, :host)}[data-turbo-permanent][data-controller='mini-app-host']"
     assert_select "iframe[data-mini-app-host-target='frame']" do |frames|
       frame = frames.first
       assert_equal "allow-scripts allow-forms allow-popups", frame["sandbox"]

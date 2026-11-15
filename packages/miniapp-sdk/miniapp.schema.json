@@ -66,6 +66,7 @@
         "type": "string",
         "enum": [
           "accounts:read",
+          "accounts:write",
           "transactions:read",
           "transactions:write",
           "categories:read",

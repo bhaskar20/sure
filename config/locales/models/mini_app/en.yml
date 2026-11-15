@@ -72,6 +72,9 @@ en:
       accounts_read:
         label: Read accounts
         description: See your accounts, balances, holdings and valuations.
+      accounts_write:
+        label: Create accounts
+        description: Create new manual accounts owned by you.
       transactions_read:
         label: Read transactions
         description: See transactions, recurring transactions and possible transfer matches.

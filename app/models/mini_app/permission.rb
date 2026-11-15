@@ -9,6 +9,7 @@
 class MiniApp::Permission
   CATALOG = {
     "accounts:read" => %w[get_accounts get_holdings get_valuations],
+    "accounts:write" => %w[create_account],
     "transactions:read" => %w[get_transactions get_recurring_transactions get_uncategorized_transactions get_transfer_match_candidates],
     "transactions:write" => %w[create_transaction update_transaction delete_transaction match_transfer unmatch_transfer update_transfer review_transfer],
     "categories:read" => %w[get_categories],
@@ -21,7 +22,7 @@ class MiniApp::Permission
     "reports:read" => %w[get_balance_sheet get_income_statement get_budget get_insights],
     "budgets:write" => %w[update_budget],
     "goals:write" => %w[create_goal],
-    "valuations:write" => %w[record_valuation set_opening_balance],
+    "valuations:write" => %w[record_valuation record_valuations set_opening_balance],
     # No tools: it unlocks the bridge's sure/ai/complete method instead.
     "ai:use" => []
   }.freeze

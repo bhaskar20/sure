@@ -20,6 +20,8 @@ module Assistant
     Function::GetAccountStatement,
     Function::GetStatementCoverage,
     Function::RecordValuation,
+    Function::RecordValuations,
+    Function::CreateAccount,
     Function::GetValuations,
     Function::GetInsights,
     # Bills: the whole subsystem is preview-gated, so its tools ride the same
@@ -38,6 +40,7 @@ module Assistant
   # Guests may view family configuration but not change it, so these tools are
   # left out of a guest's registry (chat and MCP alike).
   FAMILY_CONFIG_FUNCTION_CLASSES = [
+    Function::CreateAccount,
     Function::CreateTag,
     Function::UpdateTag,
     Function::CreateCategory,
