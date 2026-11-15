@@ -558,7 +558,9 @@ Rails.application.routes.draw do
   # cookieless) frame. The signed token in the path is the only credential.
   get "mini_app_frames/:token(/*path)", to: "mini_app_frames#show", as: :mini_app_frame, format: false
 
-  resources :merchants, only: :show
+  resources :merchants, only: :show do
+    delete :clear_filter, on: :member
+  end
 
   resources :family_merchants, only: %i[index new create edit update destroy] do
     collection do
@@ -643,6 +645,7 @@ Rails.application.routes.draw do
       post :merge_duplicate
       post :dismiss_duplicate
       post :unlock
+      patch :reconcile
       patch :tags, action: :update_tags
     end
   end
@@ -1081,6 +1084,7 @@ Rails.application.routes.draw do
 
   # MCP server endpoint for external AI assistants (JSON-RPC 2.0)
   post "mcp", to: "mcp#handle"
+  match "mcp", to: "mcp#method_not_allowed", via: %i[get delete]
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
