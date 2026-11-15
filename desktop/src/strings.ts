@@ -28,3 +28,16 @@ export const AI = {
   title: "Local AI",
   moved: "Choose, download and run local AI models in Sure under Settings → Local AI.",
 } as const;
+
+export const U = {
+  title: "Updates",
+  check: "Check for Updates",
+  checking: "Checking for updates…",
+  current: (v: string) => `Sure ${v}`,
+  upToDate: (v: string) => `Sure ${v} is up to date.`,
+  available: (latest: string, v: string) =>
+    `Sure ${latest} is available (you have ${v}). Download it, quit Sure, then drag the new Sure into Applications and choose Replace. Your data is kept.`,
+  download: (latest: string) => `Download Sure ${latest}`,
+  failed: (v: string) => `Sure ${v}. Couldn't check for updates; try again later.`,
+  disabled: (v: string) => `Sure ${v}. This build doesn't check for updates.`,
+} as const;

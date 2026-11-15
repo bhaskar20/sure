@@ -210,6 +210,8 @@ body { background: var(--bg); color: var(--text); }
 .prefs .row label { font-size: 13px; }
 
 /* Local AI pointer */
+.update-actions { display: flex; gap: 8px; align-items: center; }
+.update-actions .btn-primary { width: auto; padding: 8px 16px; }
 .ai-note { margin: 0; font-size: 12px; line-height: 1.45; color: var(--secondary); }
 
 /* Interactive elements never part of the drag region. */

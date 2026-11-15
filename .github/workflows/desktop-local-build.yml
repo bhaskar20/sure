@@ -5,12 +5,25 @@ name: Desktop (local-only) Build
 # Windows installer (.exe). All user data stays in the app's local data folder.
 # Mac builds are made locally (see desktop/README.md: npm run runtime:mac /
 # build:mac); CI builds them only when a manual run asks for it. Windows,
-# which can't be built on a Mac, builds on every run.
+# which can't be built on a Mac, builds on every run. desktop-publish.yml calls
+# this workflow to build the DMGs it releases on every push to main.
 on:
   workflow_dispatch:
     inputs:
       macos:
         description: "Also build the macOS DMGs"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      version:
+        description: "App version to stamp into the build (e.g. 0.1.42)"
+        type: string
+        required: true
+      macos:
+        type: boolean
+        default: true
+      windows:
         type: boolean
         default: false
   push:
@@ -19,10 +32,15 @@ on:
 permissions:
   contents: read
 
+env:
+  # Releases of this repository are what the app checks for updates.
+  SURE_UPDATE_REPO: ${{ github.repository }}
+  SURE_VERSION: ${{ inputs.version && format('desktop-v{0}', inputs.version) || (github.ref_type == 'tag' && github.ref_name || '') }}
+
 jobs:
   macos:
     name: macOS ${{ matrix.arch }}
-    if: github.event_name == 'workflow_dispatch' && inputs.macos
+    if: inputs.macos
     strategy:
       fail-fast: false
       matrix:
@@ -51,8 +69,14 @@ jobs:
       - name: Build bundled runtime (Ruby, app, PostgreSQL, Valkey)
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          SURE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: desktop/scripts/build-runtime-macos.sh
+
+      - name: Stamp the app version
+        if: inputs.version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node desktop/scripts/stamp-version.mjs "$VERSION"
 
       - name: Install frontend dependencies
         working-directory: desktop
@@ -91,6 +115,8 @@ jobs:
 
   windows:
     name: Windows x64
+    # Tag pushes and manual runs always build Windows; callers opt in.
+    if: inputs.windows || !inputs.version
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
@@ -121,9 +147,14 @@ jobs:
 
       - name: Build bundled runtime (Ruby, app, PostgreSQL)
         shell: pwsh
-        env:
-          SURE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: desktop/scripts/build-runtime-windows.ps1
+
+      - name: Stamp the app version
+        if: inputs.version
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+        run: node desktop/scripts/stamp-version.mjs "$VERSION"
 
       - name: Install frontend dependencies
         working-directory: desktop
