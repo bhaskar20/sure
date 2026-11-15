@@ -37,6 +37,9 @@
     "allow-local-ai-set-context",
     "allow-local-ai-delete",
     "allow-local-ai-add-custom",
-    "allow-dev-accounts"
+    "allow-dev-accounts",
+    "allow-update-status",
+    "allow-check-for-updates",
+    "allow-download-update"
   ]
 }

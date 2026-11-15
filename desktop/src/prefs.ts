@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { P, S } from "./strings";
+import { P, S, U } from "./strings";
 import { serverErrorMessage } from "./status";
 
 interface ServerEntry { url: string; label: string; }
@@ -74,3 +75,43 @@ renderServers();
 import { AI } from "./strings";
 $("ai-title").textContent = AI.title;
 $("ai-moved").textContent = AI.moved;
+
+interface UpdateInfo {
+  enabled: boolean;
+  current: string;
+  checking: boolean;
+  checked: boolean;
+  available: boolean;
+  latest: string | null;
+  error: string | null;
+}
+
+$("updates-title").textContent = U.title;
+$("update-check").textContent = U.check;
+
+function renderUpdate(info: UpdateInfo) {
+  const status = $("update-status");
+  const download = $("update-download");
+  const check = $("update-check") as HTMLButtonElement;
+  check.classList.toggle("hidden", !info.enabled);
+  check.disabled = info.checking;
+  download.classList.toggle("hidden", !(info.available && info.latest));
+  status.dataset.kind = info.error && !info.checking ? "error" : "";
+  if (!info.enabled) status.textContent = U.disabled(info.current);
+  else if (info.checking) status.textContent = U.checking;
+  else if (info.available && info.latest) {
+    status.textContent = U.available(info.latest, info.current);
+    download.textContent = U.download(info.latest);
+  } else if (info.error) status.textContent = U.failed(info.current);
+  else if (info.checked) status.textContent = U.upToDate(info.current);
+  else status.textContent = U.current(info.current);
+}
+
+$("update-check").addEventListener("click", () => {
+  invoke<UpdateInfo>("check_for_updates").then(renderUpdate).catch(() => {});
+});
+$("update-download").addEventListener("click", () => {
+  invoke("download_update").catch((err) => ($("update-status").textContent = String(err)));
+});
+listen<UpdateInfo>("updates://changed", (e) => renderUpdate(e.payload));
+invoke<UpdateInfo>("update_status").then(renderUpdate);
