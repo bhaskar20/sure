@@ -1,17 +1,26 @@
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::Manager;
+use tauri::{Manager, Wry};
 
-pub fn build(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+/// The menu, plus its update item so the update check can relabel it.
+pub fn build(app: &tauri::AppHandle) -> tauri::Result<(Menu<Wry>, MenuItem<Wry>)> {
     let pkg = app.package_info().clone();
 
     let prefs = MenuItem::with_id(app, "preferences", "Preferences…", true, Some("Cmd+,"))?;
     let switch = MenuItem::with_id(app, "switch_server", "Switch Server…", true, Some("Cmd+Shift+O"))?;
+    let updates = MenuItem::with_id(
+        app,
+        crate::updates::MENU_ID,
+        crate::updates::MENU_CHECK_LABEL,
+        true,
+        None::<&str>,
+    )?;
     let app_menu = Submenu::with_items(
         app,
         &pkg.name,
         true,
         &[
             &PredefinedMenuItem::about(app, Some(&pkg.name), Some(AboutMetadata::default()))?,
+            &updates,
             &PredefinedMenuItem::separator(app)?,
             &prefs,
             &switch,
@@ -58,7 +67,8 @@ pub fn build(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         ],
     )?;
 
-    Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
+    let menu = Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])?;
+    Ok((menu, updates))
 }
 
 pub fn on_event(app: &tauri::AppHandle, id: &str) {
@@ -80,6 +90,7 @@ pub fn on_event(app: &tauri::AppHandle, id: &str) {
                 let _ = w.unminimize();
             }
         }
+        crate::updates::MENU_ID => crate::updates::on_menu(app),
         "reload" => {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.eval("window.location.reload()");

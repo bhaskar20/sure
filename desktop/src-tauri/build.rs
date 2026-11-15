@@ -33,6 +33,9 @@ fn main() {
             "local_ai_set_context",
             "local_ai_delete",
             "local_ai_add_custom",
+            "update_status",
+            "check_for_updates",
+            "download_update",
         ]),
     ))
     .expect("failed to run tauri-build");

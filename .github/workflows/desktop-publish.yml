@@ -1,0 +1,93 @@
+name: Desktop Publish
+
+# Every push to main publishes a Sure Desktop release: a desktop-v<version> tag
+# and a GitHub Release with one DMG per Mac architecture. The installed app
+# checks these releases and offers the matching DMG as a download.
+#
+# Version: major.minor from desktop/src-tauri/tauri.conf.json, patch = this
+# workflow's run number, so every release is higher than the one before.
+# Bump major/minor in tauri.conf.json to start a new series.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "charts/**"
+      - "mobile/**"
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+# A newer push replaces a release still being built.
+concurrency:
+  group: desktop-publish
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Choose version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+      - id: v
+        env:
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          base="$(jq -r '.version' desktop/src-tauri/tauri.conf.json | cut -d. -f1,2)"
+          echo "$base" | grep -qE '^[0-9]+\.[0-9]+$' || { echo "::error::bad version base '$base'"; exit 1; }
+          echo "version=$base.$RUN_NUMBER" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: version
+    uses: ./.github/workflows/desktop-local-build.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      macos: true
+      windows: false
+    secrets: inherit
+
+  release:
+    name: Publish release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: sure-desktop-macos-*
+          path: artifacts
+
+      # Stable names, so the app (and any website link) can find the DMG for
+      # its architecture: releases/latest/download/Sure-macOS-arm64.dmg
+      - name: Name the DMGs
+        run: |
+          set -euo pipefail
+          mkdir release
+          for arch in arm64 x86_64; do
+            dmg=(artifacts/sure-desktop-macos-$arch/*.dmg)
+            [ "${#dmg[@]}" -eq 1 ] && [ -f "${dmg[0]}" ] || { echo "::error::expected one DMG for $arch"; exit 1; }
+            cp "${dmg[0]}" "release/Sure-macOS-$arch.dmg"
+          done
+          ls -l release
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "desktop-v$VERSION" release/*.dmg \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Sure Desktop $VERSION" \
+            --generate-notes \
+            --latest

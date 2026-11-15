@@ -11,6 +11,7 @@ pub mod notifications;
 pub mod servers;
 pub mod sso;
 pub mod state;
+pub mod updates;
 pub mod window;
 
 use state::AppState;
@@ -27,6 +28,7 @@ pub fn run() {
         .manage(AppState::default())
         .manage(local_backend::LocalBackend::default())
         .manage(local_ai_app::AiHandle::default())
+        .manage(updates::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             commands::list_servers,
             commands::add_server,
@@ -48,6 +50,9 @@ pub fn run() {
             local_ai_app::local_ai_set_context,
             local_ai_app::local_ai_delete,
             local_ai_app::local_ai_add_custom,
+            updates::update_status,
+            updates::check_for_updates,
+            updates::download_update,
         ])
         .setup(|app| {
             window::setup(app)?;
@@ -68,8 +73,9 @@ pub fn run() {
                     eprintln!("[sure] could not install the quit signal handler: {e}");
                 }
             }
-            let menu = menu::build(app.handle())?;
+            let (menu, update_item) = menu::build(app.handle())?;
             app.set_menu(menu)?;
+            updates::setup(app.handle(), update_item);
             app.on_menu_event(|app, event| menu::on_event(app, event.id().as_ref()));
             notifications::register(app.handle());
             badge::register(app.handle());
