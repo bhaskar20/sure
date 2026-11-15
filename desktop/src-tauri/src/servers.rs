@@ -1,7 +1,20 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-const KEYRING_SERVICE: &str = "app.sure.desktop";
+/// Keychain service and Application Support folder name: the app's bundle
+/// identifier, so local builds ("Sure Dev", app.sure.desktop.dev) keep a server
+/// list apart from the installed app's.
+static SERVICE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+const DEFAULT_SERVICE: &str = "app.sure.desktop";
+
+/// Set once at startup, before any server list is read.
+pub fn init(identifier: &str) {
+    let _ = SERVICE.set(identifier.to_string());
+}
+
+fn service() -> &'static str {
+    SERVICE.get().map(String::as_str).unwrap_or(DEFAULT_SERVICE)
+}
 const KEYRING_ACCOUNT: &str = "servers";
 const KEYRING_ACTIVE: &str = "active_server";
 
@@ -102,7 +115,7 @@ pub fn is_healthy_status(status: u16) -> bool {
 }
 
 fn keyring_entry() -> Result<keyring::Entry, ServerError> {
-    keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+    keyring::Entry::new(service(), KEYRING_ACCOUNT)
         .map_err(|e| ServerError::Keyring(e.to_string()))
 }
 
@@ -113,7 +126,7 @@ fn data_dir() -> Option<std::path::PathBuf> {
     let home = std::env::var_os("HOME")?;
     let dir = std::path::Path::new(&home)
         .join("Library/Application Support")
-        .join(KEYRING_SERVICE);
+        .join(service());
     std::fs::create_dir_all(&dir).ok()?;
     Some(dir)
 }
@@ -184,7 +197,7 @@ pub fn load_active() -> Option<String> {
     if let Some(url) = file_read("active_server").filter(|s| !s.is_empty()) {
         return Some(url);
     }
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACTIVE) {
+    if let Ok(entry) = keyring::Entry::new(service(), KEYRING_ACTIVE) {
         if let Ok(url) = entry.get_password() {
             if !url.is_empty() {
                 return Some(url);
@@ -195,7 +208,7 @@ pub fn load_active() -> Option<String> {
 }
 
 pub fn save_active(url: &str) -> Result<(), ServerError> {
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACTIVE) {
+    if let Ok(entry) = keyring::Entry::new(service(), KEYRING_ACTIVE) {
         let _ = entry.set_password(url);
     }
     file_write("active_server", url)

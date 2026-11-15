@@ -31,6 +31,13 @@ all three. All state lives in the app's local data folder:
 - macOS: `~/Library/Application Support/app.sure.desktop/local/`
 - Windows: `%LOCALAPPDATA%\app.sure.desktop\local\`
 
+Released builds are **Sure** (`app.sure.desktop`). Everything built from a
+checkout (`npm run dev:*`, `build:app`, `build:mac`) is **Sure Dev**
+(`app.sure.desktop.dev`, from `src-tauri/tauri.dev.conf.json`): a separate app
+with its own data folder (`…/app.sure.desktop.dev/`), saved servers and web
+storage, so developing never touches the data of the Sure you use day to day.
+Both register `sure://` links; macOS opens them in whichever it picks.
+
 The folder holds `secrets.json` (the Rails secret, which also derives the
 encryption keys, so back it up with the data), `pgdata/`, `valkey/`, `storage/`
 (uploads) and `logs/`. On the first launch you create your account on the
@@ -48,8 +55,8 @@ Everything below runs from `desktop/` after `npm ci`.
 | `npm run dev:local` | Human testing: Sure on port 3000 (stopping a Sure app already there), then pick an account to sign in as | ~10 s to a running Sure |
 | `npm run dev:agent` | For coding agents: first free port from 3100, separate data; never touches the human's app ([CLAUDE.md](CLAUDE.md)) | ~10 s |
 | `npm run seed:dev` / `seed:agent` | With the dev app running: add test accounts and the demo family to its data (safe to re-run) | ~1.5 min first time |
-| `npm run build:app` | Build `Sure.app` (copies `runtime/` into the bundle) | ~2 min |
-| `npm run build:mac` | Build `Sure.app` and the `.dmg` | ~3 min |
+| `npm run build:app` | Build `Sure Dev.app` (copies `runtime/` into the bundle) | ~2 min |
+| `npm run build:mac` | Build `Sure Dev.app` and the `.dmg` | ~3 min |
 | `npm run test:rust` / `test:smoke` | Rust tests / boot `runtime/` end to end | seconds / ~30 s |
 
 `seed:dev` creates these sign-ins (local development fixtures only):
@@ -63,12 +70,15 @@ Everything below runs from `desktop/` after `npm ci`.
 `scripts/local-rails.sh --dev …` runs any other Rails command (`console`,
 `runner`, rake tasks) against the dev data.
 
-Dev mode keeps its data in `…/app.sure.desktop/local-dev-<id>/`, one folder per
-checkout (worktrees included), separate from an installed Sure's `local/`, so
-they can all run at once without stopping each other's services. The path is
-written to `desktop/.dev-data-dir`. Ctrl+C (or SIGTERM) quits like ⌘Q: the
-database, Valkey and the model server stop too.
-`Sure.app` before rebuilding it, since the build replaces its files in place.
+Dev mode keeps its data in `…/app.sure.desktop.dev/local-dev-<id>/`, one folder
+per checkout (worktrees included); a built `Sure Dev.app` uses
+`…/app.sure.desktop.dev/local/`. None of them share data with an installed
+Sure, so they can all run at once without stopping each other's services. The
+dev-mode path is written to `desktop/.dev-data-dir`. Ctrl+C (or SIGTERM) quits
+like ⌘Q: the database, Valkey and the model server stop too. Quit a running
+`Sure Dev.app` before rebuilding it, since the build replaces its files in
+place. To run Rails commands against a built one, point `local-rails.sh` at
+it: `SURE_APP="src-tauri/target/release/bundle/macos/Sure Dev.app"`.
 
 Build on the target architecture (Apple Silicon or Intel). Set
 `APPLE_SIGNING_IDENTITY` to sign the bundled executables for notarization.
