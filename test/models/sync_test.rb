@@ -356,6 +356,34 @@ class SyncTest < ActiveSupport::TestCase
     assert_not_equal sync.id, new_sync.id
   end
 
+  test "sync_later joins a pending sync" do
+    account = accounts(:depository)
+    Sync.where(syncable: account).destroy_all
+    pending = Sync.create!(syncable: account)
+
+    assert_no_difference "Sync.count" do
+      assert_equal pending.id, account.sync_later.id
+    end
+  end
+
+  test "sync_later queues a new sync instead of joining one that is already running" do
+    account = accounts(:depository)
+    Sync.where(syncable: account).destroy_all
+    running = Sync.create!(syncable: account, status: :syncing)
+
+    new_sync = nil
+    assert_difference "Sync.count", 1 do
+      assert_enqueued_with(job: SyncJob) { new_sync = account.sync_later }
+    end
+    assert_not_equal running.id, new_sync.id
+    assert new_sync.pending?
+
+    # Further requests join the queued sync rather than adding more.
+    assert_no_difference "Sync.count" do
+      assert_equal new_sync.id, account.sync_later.id
+    end
+  end
+
   test "family syncer stops scheduling children once cancel is requested" do
     family = families(:dylan_family)
     sync = Sync.create!(syncable: family, status: :syncing, cancel_requested_at: Time.current)

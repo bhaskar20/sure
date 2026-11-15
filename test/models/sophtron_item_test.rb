@@ -156,11 +156,13 @@ class SophtronItemTest < ActiveSupport::TestCase
     sync = @item.syncs.create!
     sync.start!
 
-    assert_no_difference "@item.syncs.count" do
+    # The running sync may have read its data already, so a new one is queued behind it.
+    assert_difference "@item.syncs.count", 1 do
       assert_enqueued_with job: SophtronInitialLoadJob do
         @item.start_initial_load_later
       end
     end
+    assert @item.syncs.ordered.first.pending?
   end
   test "manual Sophtron accounts do not remove the whole item from automatic sync scope" do
     manual_item = @family.sophtron_items.create!(
