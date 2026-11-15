@@ -12,6 +12,8 @@ class Provider::Openai < Provider
 
   DEFAULT_MODEL = "gpt-4.1".freeze
   DEFAULT_REQUEST_TIMEOUT = 60
+  FINAL_ROUND_INSTRUCTION = "Tools are no longer available for this reply. Answer my question now " \
+                            "using the tool results above, and say what you could not check.".freeze
   MIN_REQUEST_TIMEOUT = 1
   SUPPORTED_MODELS = %w[gpt-4 gpt-5 gpt-6 o1 o3].freeze
   VISION_CAPABLE_MODEL_PREFIXES = %w[gpt-4o gpt-4-turbo gpt-4.1 gpt-5 gpt-6 o1 o3].freeze
@@ -672,6 +674,12 @@ class Provider::Openai < Provider
 
         tools = build_generic_tools(functions)
 
+        # Local models (Qwen on llama.cpp) ignore tool_choice "none" and write
+        # their next call as text, so also tell them in words to answer now.
+        if tool_choice == :none && tools.present?
+          messages += [ { role: "user", content: FINAL_ROUND_INSTRUCTION } ]
+        end
+
         # Force synchronous calls for generic chat (streaming not supported for custom providers)
         params = {
           model: model,
@@ -754,6 +762,7 @@ class Provider::Openai < Provider
       # For each tool round, add the assistant message that made the tool calls
       # followed by the tool messages with the results, in order, so each
       # follow-up request extends the previous one and prefix caches stay valid.
+      tool_tokens_used = 0
       Assistant::Responder.group_by_round(function_results).each do |round_results|
         # Build assistant message with tool_calls
         tool_calls = round_results.map do |fn_result|
@@ -793,6 +802,18 @@ class Provider::Openai < Provider
             output.to_json
           end
 
+          # A result that would overflow the context window would make the
+          # provider reject the whole request; replace it with an error the
+          # model can act on. Results are checked in order, so a later request
+          # makes the same decisions and keeps extending the earlier one.
+          tokens = Assistant::TokenEstimator.estimate_data(content)
+          if tool_tokens_used + tokens > max_tool_result_tokens
+            Rails.logger.warn("[Provider::Openai] Tool result from #{fn_result[:name]} (~#{tokens} tokens) exceeds the #{max_tool_result_tokens}-token tool budget; replaced with an error")
+            content = oversized_tool_result(fn_result[:name], tokens).to_json
+            tokens = Assistant::TokenEstimator.estimate_data(content)
+          end
+          tool_tokens_used += tokens
+
           payload << {
             role: "tool",
             tool_call_id: fn_result[:call_id],
@@ -802,6 +823,23 @@ class Provider::Openai < Provider
       end
 
       payload
+    end
+
+    # Share of the context window that tool results in one reply may use. The
+    # system prompt and tool definitions already take a large part of it
+    # (about 20K tokens for Sure's assistant).
+    def max_tool_result_tokens
+      [ context_window / 3, 1024 ].max
+    end
+
+    def oversized_tool_result(name, tokens)
+      {
+        success: false,
+        error: "result_too_large",
+        message: "The #{name} result (about #{tokens} tokens) is too large for this model's " \
+                 "#{context_window}-token context window. Call it again with a narrower request: " \
+                 "a shorter period, fewer items, or without optional detail such as balance series."
+      }
     end
 
     def build_generic_tools(functions)

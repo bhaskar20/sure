@@ -40,7 +40,7 @@ permissions:
 env:
   # Releases of this repository are what the app checks for updates.
   SURE_UPDATE_REPO: ${{ github.repository }}
-  SURE_VERSION: ${{ inputs.version && format('desktop-v{0}', inputs.version) || (github.ref_type == 'tag' && github.ref_name || '') }}
+  SURE_VERSION: ${{ inputs.version || (github.ref_type == 'tag' && github.ref_name || '') }}
 
 jobs:
   macos:
