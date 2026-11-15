@@ -10,6 +10,7 @@
 
 export type Permission =
   | "accounts:read"
+  | "accounts:write"
   | "transactions:read"
   | "transactions:write"
   | "categories:read"

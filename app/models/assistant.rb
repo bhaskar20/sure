@@ -20,6 +20,8 @@ module Assistant
     Function::GetAccountStatement,
     Function::GetStatementCoverage,
     Function::RecordValuation,
+    Function::RecordValuations,
+    Function::CreateAccount,
     Function::GetValuations,
     Function::GetInsights,
     # Bills: the whole subsystem is preview-gated, so its tools ride the same
@@ -40,6 +42,7 @@ module Assistant
   # alike). PreviewRule writes nothing, but it issues the token ApplyRule needs,
   # and the web blocks guests from a rule's confirmation page too.
   FAMILY_CONFIG_FUNCTION_CLASSES = [
+    Function::CreateAccount,
     Function::CreateTag,
     Function::UpdateTag,
     Function::CreateCategory,

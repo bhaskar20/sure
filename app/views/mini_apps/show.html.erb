@@ -1,6 +1,10 @@
 <%= content_for :page_title, @mini_app.name %>
 
+<%# Permanent: account syncs broadcast a morph refresh, and the new frame URL
+    it renders would reload the app mid-task and drop its state. %>
 <div class="space-y-4 pb-6"
+     id="<%= dom_id(@mini_app, :host) %>"
+     data-turbo-permanent
      data-controller="mini-app-host"
      data-mini-app-host-bridge-url-value="<%= bridge_mini_app_path(@mini_app) %>">
   <header class="flex items-center gap-3 flex-wrap">
