@@ -1,0 +1,19 @@
+{
+  "id": "net-worth-tracker",
+  "name": "Net Worth Tracker",
+  "version": "1.1.0",
+  "description": "Bring a month-by-account net worth spreadsheet into Sure, then record each month's balances in one form.",
+  "entry": "index.html",
+  "icon": "table",
+  "permissions": [
+    "accounts:read",
+    "accounts:write",
+    "valuations:write",
+    "reports:read"
+  ],
+  "slots": [
+    "page"
+  ],
+  "network": [],
+  "author": "Sure"
+}

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Net Worth Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Net Worth Tracker</h1>
+        <p id="status" class="muted" role="status">Connecting to Sure…</p>
+      </header>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="monthly" aria-selected="true">Monthly entry</button>
+        <button type="button" role="tab" data-tab="import" aria-selected="false">Import spreadsheet</button>
+        <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+      </nav>
+
+      <!-- Monthly entry -->
+      <section id="tab-monthly" class="panel">
+        <p id="monthly-empty" class="notice" hidden>
+          No accounts are tracked yet. Import your spreadsheet first, or add Sure accounts below.
+        </p>
+        <form id="monthly-form">
+          <p class="muted">
+            Enter today's balances. Sure records them as of <strong id="entry-date"></strong>,
+            each in its account's own currency.
+          </p>
+
+          <div id="monthly-groups"></div>
+
+          <div class="row add-row">
+            <label class="field grow">
+              <span>Track another Sure account</span>
+              <select id="add-account"></select>
+            </label>
+            <label class="field">
+              <span>Section</span>
+              <select id="add-section">
+                <option value="asset">Asset</option>
+                <option value="liability">Liability</option>
+              </select>
+            </label>
+            <button type="button" id="add-account-button" class="secondary">Add</button>
+          </div>
+
+          <label class="field">
+            <span>Note</span>
+            <input type="text" id="month-note" maxlength="200" placeholder="Bonus paid, market dip, bought gold…">
+          </label>
+
+          <div class="summary" id="monthly-summary"></div>
+
+          <div class="row">
+            <button type="submit" id="save-month" class="primary">Save balances to Sure</button>
+            <span id="save-status" class="muted"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Import -->
+      <section id="tab-import" class="panel" hidden>
+        <p class="muted">
+          Pick the spreadsheet exported as CSV: one row per account (name, currency), one column per month,
+          exchange-rate rows at the top and a TOTAL row closing the assets and the liabilities.
+        </p>
+        <div class="row">
+          <label class="field grow">
+            <span>CSV file</span>
+            <input type="file" id="csv-file" accept=".csv,text/csv">
+          </label>
+        </div>
+        <details>
+          <summary class="small">Or paste the CSV text</summary>
+          <textarea id="csv-text" rows="6" spellcheck="false"></textarea>
+          <button type="button" id="csv-text-button" class="secondary">Read pasted CSV</button>
+        </details>
+
+        <div id="preview" hidden>
+          <div id="preview-summary" class="summary"></div>
+          <p id="policy-notice" class="notice" hidden>
+            Sure asks you to approve every write. This import makes about <strong id="write-count"></strong> writes:
+            a family admin can set this app to "Allow writes" on Sure's Apps page to skip the prompts.
+          </p>
+
+          <h2>Accounts</h2>
+          <p class="muted small">Each spreadsheet row goes to a new Sure account or one you already have. Rows set to "Skip" are left out.</p>
+          <div class="table-wrap">
+            <table id="mapping">
+              <thead>
+                <tr>
+                  <th>Row</th>
+                  <th>Values</th>
+                  <th>Latest</th>
+                  <th>Sure account</th>
+                  <th>Name</th>
+                  <th>Type</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="row">
+            <button type="button" id="import-button" class="primary">Import into Sure</button>
+            <button type="button" id="cancel-import" class="secondary" hidden>Stop</button>
+          </div>
+          <progress id="import-progress" max="1" value="0" hidden></progress>
+          <ol id="import-log" class="log"></ol>
+        </div>
+      </section>
+
+      <!-- History -->
+      <section id="tab-history" class="panel" hidden>
+        <p class="muted small" id="history-caption"></p>
+        <div class="table-wrap">
+          <table id="history">
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th class="num">Assets</th>
+                <th class="num">Liabilities</th>
+                <th class="num">Net worth</th>
+                <th class="num">Change</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="history-empty" class="muted" hidden>No months recorded yet.</p>
+      </section>
+    </main>
+
+    <!-- Copied into the bundle by bin/miniapp-pack. No CDN: the frame has no network. -->
+    <script src="sure-miniapp.js"></script>
+    <script src="legacy-csv.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
