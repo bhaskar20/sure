@@ -74,4 +74,6 @@ fi
 echo "Sure ($mode mode): http://127.0.0.1:$web_port  (frontend dev server on $frontend_port)"
 export SURE_DEV_MODE="$mode" SURE_WEB_PORT="$web_port" SURE_DEV_PORT="$frontend_port"
 export SURE_RUNTIME_DIR="${SURE_RUNTIME_DIR:-$PWD/runtime}"
-exec npx tauri dev --config "{\"build\":{\"devUrl\":\"http://localhost:$frontend_port\"}}"
+# tauri.dev.conf.json: run as "Sure Dev" (app.sure.desktop.dev), so dev data,
+# saved servers and web storage stay apart from an installed Sure's.
+exec npx tauri dev --config src-tauri/tauri.dev.conf.json --config "{\"build\":{\"devUrl\":\"http://localhost:$frontend_port\"}}"

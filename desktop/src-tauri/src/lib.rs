@@ -55,6 +55,7 @@ pub fn run() {
             updates::download_update,
         ])
         .setup(|app| {
+            servers::init(&app.config().identifier);
             window::setup(app)?;
             // Packaged builds run Sure on this computer; the main window shows
             // progress and opens the local server once it answers.
