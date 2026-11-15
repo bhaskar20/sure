@@ -31,7 +31,12 @@ mkdir -p "$OUT"
   | (cd "$REPO" && tar -cf - -T -) \
   | tar -xf - -C "$OUT"
 mkdir -p "$OUT/tmp" "$OUT/log" "$OUT/storage"
-if [ -n "${SURE_VERSION:-}" ]; then printf '%s\n' "$SURE_VERSION" > "$OUT/.sure-version"; fi
+# Sure parses .sure-version as a plain version number (Gem::Version), so drop a
+# release-tag prefix such as "desktop-v" or "v".
+if [ -n "${SURE_VERSION:-}" ]; then
+  version="${SURE_VERSION#desktop-}"
+  printf '%s\n' "${version#v}" > "$OUT/.sure-version"
+fi
 
 cd "$OUT"
 echo "==> Ruby: $(ruby -v)"
