@@ -46,6 +46,9 @@ pub struct CatalogModel {
     /// Rough memory the model needs while running, for the UI.
     pub ram_gb: u32,
     pub recommended: bool,
+    /// The longest context the model was trained for. llama-server caps a
+    /// larger --ctx-size to it, so Sure must budget against this instead.
+    pub max_context: u32,
     /// Extra llama-server flags (e.g. turning off "thinking" on hybrid models,
     /// which only slows tool calls down).
     #[serde(skip)]
@@ -64,6 +67,7 @@ pub const CATALOG: &[CatalogModel] = &[
         license: "Apache-2.0",
         ram_gb: 7,
         recommended: true,
+        max_context: 262_144,
         server_args: &[],
     },
     CatalogModel {
@@ -77,6 +81,7 @@ pub const CATALOG: &[CatalogModel] = &[
         license: "Apache-2.0",
         ram_gb: 5,
         recommended: false,
+        max_context: 40_960,
         server_args: &["--reasoning-budget", "0"],
     },
     CatalogModel {
@@ -90,6 +95,7 @@ pub const CATALOG: &[CatalogModel] = &[
         license: "Llama 3.2 Community License",
         ram_gb: 6,
         recommended: false,
+        max_context: 131_072,
         server_args: &[],
     },
     CatalogModel {
@@ -103,6 +109,7 @@ pub const CATALOG: &[CatalogModel] = &[
         license: "Apache-2.0",
         ram_gb: 11,
         recommended: false,
+        max_context: 40_960,
         server_args: &["--reasoning-budget", "0"],
     },
 ];
@@ -347,15 +354,25 @@ impl LocalAi {
             ("OPENAI_URI_BASE", format!("http://127.0.0.1:{}/v1", config.port)),
             ("OPENAI_MODEL", MODEL_ALIAS.to_string()),
             ("OPENAI_SUPPORTS_PDF_PROCESSING", "false".to_string()),
-            ("LLM_CONTEXT_WINDOW", config.context.to_string()),
+            ("LLM_CONTEXT_WINDOW", self.effective_context().to_string()),
             ("OPENAI_REQUEST_TIMEOUT", "300".to_string()),
-            ("ASSISTANT_MAX_TOOL_CALL_ITERATIONS", "3".to_string()),
+            // Small models often need a retry after a tool error (such as a
+            // result too large for the context) before they can answer.
+            ("ASSISTANT_MAX_TOOL_CALL_ITERATIONS", "6".to_string()),
             ("AI_RESPONSE_TIMEOUT", "1500".to_string()),
             ("RAILS_AI_MAX_THREADS", "1".to_string()),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
         .collect()
+    }
+
+    /// The context size to run with: the chosen size, capped at what the
+    /// active catalog model supports. Custom models use the chosen size.
+    pub fn effective_context(&self) -> u32 {
+        let config = self.config();
+        let model_max = config.active.as_deref().and_then(|id| CATALOG.iter().find(|m| m.id == id)).map(|m| m.max_context);
+        model_max.map_or(config.context, |max| config.context.min(max))
     }
 
     /// llama-server's command line for the active model.
@@ -373,7 +390,7 @@ impl LocalAi {
             "--alias".into(),
             MODEL_ALIAS.into(),
             "--ctx-size".into(),
-            config.context.to_string(),
+            self.effective_context().to_string(),
             // Offload every layer to the GPU when there is one (Metal on Macs,
             // Vulkan on Windows); llama.cpp falls back to the CPU otherwise.
             "--n-gpu-layers".into(),

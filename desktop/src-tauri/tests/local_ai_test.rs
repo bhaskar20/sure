@@ -92,6 +92,27 @@ fn sure_only_gets_ai_settings_when_enabled_with_a_downloaded_model() {
 }
 
 #[test]
+fn context_is_capped_at_what_the_active_model_was_trained_for() {
+    let root = temp_root("model-max");
+    let ai = Arc::new(LocalAi::new(Some(fake_server(&root)), root).unwrap());
+    let small = CATALOG.iter().find(|m| m.id == "qwen3-8b").unwrap();
+    ai.set_enabled(true).unwrap();
+    ai.set_context(65_536).unwrap();
+    ai.select(small.id).unwrap();
+    fake_gguf(&ai.models_dir().join(small.file));
+
+    assert_eq!(ai.effective_context(), small.max_context);
+    let env: HashMap<_, _> = ai.rails_env().into_iter().collect();
+    assert_eq!(env["LLM_CONTEXT_WINDOW"], small.max_context.to_string(), "Sure budgets for the context the server really has");
+    let args = ai.server_args(Path::new("/models/m.gguf")).join(" ");
+    assert!(args.contains(&format!("--ctx-size {}", small.max_context)));
+    assert_eq!(ai.config().context, 65_536, "the chosen size is kept for models that support it");
+
+    ai.select(CATALOG[0].id).unwrap();
+    assert_eq!(ai.effective_context(), 65_536);
+}
+
+#[test]
 fn builds_without_llama_server_never_enable_local_ai() {
     let root = temp_root("unavailable");
     let ai = Arc::new(LocalAi::new(None, root).unwrap());
