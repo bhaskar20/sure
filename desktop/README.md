@@ -149,19 +149,21 @@ stamped into `desktop/package.json` and `desktop/src-tauri/tauri.conf.json`
 only while building. The universal `.dmg` is attached to that same GitHub
 Release—there is no separate desktop action, tag, or version.
 
-### Local-only builds from main
-`.github/workflows/desktop-publish.yml` publishes the bundled (local-only) app
-on every push to `main` that touches app code: it builds both Mac DMGs with
-`desktop-local-build.yml`, then creates a `desktop-v<version>` tag and a GitHub
-Release with `Sure-macOS-arm64.dmg` and `Sure-macOS-x86_64.dmg`. The version is
-major.minor from `src-tauri/tauri.conf.json` plus the workflow run number
-(`0.1.57`); bump major/minor there to start a new series. A newer push cancels
-a release still being built. Run it by hand from the Actions tab
-(workflow_dispatch) to publish without a push.
+### Publishing the local-only app
+Publish a GitHub Release whose tag is `desktop-v<major>.<minor>.<patch>`
+(Releases → Draft a new release → choose a tag such as `desktop-v0.2.0`,
+created on publish, target `main` → Publish release). That runs
+`.github/workflows/desktop-publish.yml`, which builds both Mac DMGs at the tag
+with `desktop-local-build.yml` and attaches `Sure-macOS-arm64.dmg` and
+`Sure-macOS-x86_64.dmg` to the release, about 45 minutes later. The tag is the
+app version, so each release must be higher than the last; pre-releases are
+built too but installed apps don't offer them. If the build fails, fix it and
+run **Desktop Publish** by hand from the Actions tab with the release's tag.
+Tags not starting with `desktop-v` are ignored by this workflow.
 
 ## Updating an installed app
 CI builds check this repository's `desktop-v*` releases 20 seconds after launch
-and every 6 hours. When a newer one exists, Sure sends a notification and the
+and every 6 hours. When a newer one with this Mac's DMG attached exists, Sure sends a notification and the
 app menu item **Check for Updates…** becomes **Download Sure <version>…**,
 which opens the DMG for this Mac in the browser. **Preferences → Updates**
 shows the result and checks on demand. Nothing is installed automatically:

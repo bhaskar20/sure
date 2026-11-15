@@ -1,61 +1,64 @@
 name: Desktop Publish
 
-# Every push to main publishes a Sure Desktop release: a desktop-v<version> tag
-# and a GitHub Release with one DMG per Mac architecture. The installed app
-# checks these releases and offers the matching DMG as a download.
+# Publishing a GitHub Release tagged desktop-v<major>.<minor>.<patch> (for
+# example desktop-v0.2.0) builds the Mac DMGs at that tag and attaches them to
+# the release. Installed apps check these releases and offer the DMG for their
+# Mac once it is attached. The tag is the app version, so each release must be
+# higher than the one before.
 #
-# Version: major.minor from desktop/src-tauri/tauri.conf.json, patch = this
-# workflow's run number, so every release is higher than the one before.
-# Bump major/minor in tauri.conf.json to start a new series.
+# To rebuild the DMGs of an existing release, run this workflow by hand with
+# its tag.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "charts/**"
-      - "mobile/**"
-      - "docs/**"
-      - "**/*.md"
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and attach DMGs to (desktop-vX.Y.Z)"
+        type: string
+        required: true
 
-# A newer push replaces a release still being built.
 concurrency:
-  group: desktop-publish
-  cancel-in-progress: true
+  group: desktop-publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
   version:
-    name: Choose version
+    name: Read version
+    # Other releases (the server's v* releases) are not desktop releases.
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'desktop-v')
     runs-on: ubuntu-latest
     outputs:
+      tag: ${{ steps.v.outputs.tag }}
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
-        with:
-          persist-credentials: false
       - id: v
         env:
-          RUN_NUMBER: ${{ github.run_number }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -euo pipefail
-          base="$(jq -r '.version' desktop/src-tauri/tauri.conf.json | cut -d. -f1,2)"
-          echo "$base" | grep -qE '^[0-9]+\.[0-9]+$' || { echo "::error::bad version base '$base'"; exit 1; }
-          echo "version=$base.$RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          version="${TAG#desktop-v}"
+          echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::tag '$TAG' must look like desktop-v1.2.3"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build
     needs: version
     uses: ./.github/workflows/desktop-local-build.yml
     with:
+      ref: ${{ needs.version.outputs.tag }}
       version: ${{ needs.version.outputs.version }}
       macos: true
       windows: false
     secrets: inherit
 
-  release:
-    name: Publish release
+  attach:
+    name: Attach DMGs to release
     needs: [version, build]
     runs-on: ubuntu-latest
     permissions:
@@ -79,15 +82,8 @@ jobs:
           done
           ls -l release
 
-      - name: Create tag and release
+      - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          gh release create "desktop-v$VERSION" release/*.dmg \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Sure Desktop $VERSION" \
-            --generate-notes \
-            --latest
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release upload "$TAG" release/*.dmg --clobber --repo "$GITHUB_REPOSITORY"

@@ -199,12 +199,17 @@ fn pick_latest(releases: Vec<Release>, wanted_asset: Option<&str>) -> Option<Lat
         .filter_map(|r| {
             let version = r.tag_name.strip_prefix(TAG_PREFIX)?.to_string();
             parse_version(&version)?;
-            let download_url = wanted_asset.and_then(|name| {
-                r.assets
-                    .iter()
-                    .find(|a| a.name == name)
-                    .map(|a| a.browser_download_url.clone())
-            });
+            // DMGs are attached a while after a release is published; until
+            // this Mac's is there, the release isn't offered.
+            let download_url = match wanted_asset {
+                Some(name) => Some(
+                    r.assets
+                        .iter()
+                        .find(|a| a.name == name)
+                        .map(|a| a.browser_download_url.clone())?,
+                ),
+                None => None,
+            };
             Some(Latest { version, download_url, release_url: r.html_url })
         })
         .max_by(|a, b| parse_version(&a.version).cmp(&parse_version(&b.version)))
@@ -319,10 +324,20 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_release_page_without_matching_asset() {
-        let latest = pick_latest(vec![release("desktop-v0.1.3", &["other.zip"])], Some("Sure-macOS-arm64.dmg")).unwrap();
+    fn skips_releases_whose_dmg_is_not_attached_yet() {
+        let releases = vec![
+            release("desktop-v0.1.4", &["Sure-macOS-x86_64.dmg"]),
+            release("desktop-v0.1.3", &["Sure-macOS-arm64.dmg"]),
+        ];
+        let latest = pick_latest(releases, Some("Sure-macOS-arm64.dmg")).unwrap();
+        assert_eq!(latest.version, "0.1.3");
+        assert!(pick_latest(vec![release("desktop-v0.1.5", &[])], Some("Sure-macOS-arm64.dmg")).is_none());
+    }
+
+    #[test]
+    fn offers_release_page_where_no_dmg_is_built() {
+        let latest = pick_latest(vec![release("desktop-v0.1.3", &[])], None).unwrap();
         assert!(latest.download_url.is_none());
-        let info = UpdateInfo { release_url: Some(latest.release_url), ..Default::default() };
-        assert!(info.release_url.unwrap().starts_with("https://github.com/"));
+        assert!(latest.release_url.starts_with("https://github.com/"));
     }
 }
