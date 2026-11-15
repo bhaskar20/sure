@@ -163,6 +163,15 @@ class Sync < ApplicationRecord
     in_progress? && created_at > VISIBLE_FOR.ago
   end
 
+  # A pending sync waits while another sync of the same syncable is running, so the two
+  # never compute the same balances at once and this one sees every change made before
+  # it was queued. Runs older than VISIBLE_FOR are treated as lost and do not block.
+  def waiting_for_running_sync?
+    pending? &&
+      Sync.visible.where(syncable_type: syncable_type, syncable_id: syncable_id, status: "syncing")
+          .where.not(id: id).exists?
+  end
+
   def terminal?
     completed? || failed? || stale?
   end
