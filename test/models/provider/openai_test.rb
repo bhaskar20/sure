@@ -1070,6 +1070,45 @@ class Provider::OpenaiTest < ActiveSupport::TestCase
     assert_not_includes third_request.to_json, "\"round\":", "the round tag must not leak into the request"
   end
 
+  test "generic chat tells the model to answer when tool calls are no longer allowed" do
+    provider = Provider::Openai.new("test-token", uri_base: "http://127.0.0.1:8080/v1", model: "test-model")
+    sent = []
+    provider.send(:client).stubs(:chat).with { |params| sent << params.fetch(:parameters); true }.returns(
+      "id" => "chatcmpl-1", "model" => "test-model",
+      "choices" => [ { "message" => { "role" => "assistant", "content" => "ok" } } ]
+    )
+    functions = [ { name: "get_accounts", description: "Lists accounts", params_schema: { type: "object", properties: {} }, strict: false } ]
+
+    provider.chat_response("hi", model: "test-model", functions: functions)
+    provider.chat_response("hi", model: "test-model", functions: functions, tool_choice: :none)
+
+    assert_not_equal Provider::Openai::FINAL_ROUND_INSTRUCTION, sent.first[:messages].last[:content]
+    assert_equal "none", sent.last[:tool_choice]
+    assert_equal({ role: "user", content: Provider::Openai::FINAL_ROUND_INSTRUCTION }, sent.last[:messages].last)
+  end
+
+  test "build_generic_messages replaces a tool result too large for the context window" do
+    provider = Provider::Openai.new("test-token", uri_base: "http://127.0.0.1:8080/v1", model: "test-model")
+    series = { "historical_balances" => { "values" => Array.new(2_000) { |i| 10_000.25 + i } } }
+    small = { "categories" => [ "Food" ] }
+
+    with_env_overrides("LLM_CONTEXT_WINDOW" => "6000") do
+      round_1 = [ { call_id: "call_a", name: "get_categories", arguments: "{}", output: small, round: 1 } ]
+      round_2 = [ { call_id: "call_b", name: "get_accounts", arguments: "{}", output: series, round: 2 } ]
+      second_request = provider.send(:build_generic_messages, prompt: "hi", instructions: "system", function_results: round_1)
+      third_request = provider.send(:build_generic_messages, prompt: "hi", instructions: "system", function_results: round_1 + round_2)
+
+      assert_equal second_request, third_request.first(second_request.size)
+      tool_messages = third_request.select { |m| m[:role] == "tool" }
+      assert_equal small.to_json, tool_messages.first[:content]
+
+      replaced = JSON.parse(tool_messages.last[:content])
+      assert_equal "result_too_large", replaced["error"]
+      assert_includes replaced["message"], "get_accounts"
+      assert_includes replaced["message"], "6000-token context window"
+    end
+  end
+
   test "OpenRouter chat records provider cost and tokens for an unknown model with a streamer" do
     provider = Provider::Openai.new("test-token", uri_base: "https://openrouter.ai/api/v1", model: "deepseek/example-model")
     usage = { "prompt_tokens" => 10, "completion_tokens" => 5, "total_tokens" => 15, "cost" => 0.012345 }

@@ -33,8 +33,12 @@ class Provider::Openai::GenericChatParser
       object.dig("choices", 0, "message")
     end
 
+    # Tool-call markup a local model wrote as text instead of a structured
+    # call (an unclosed block runs to the end of the reply).
+    TOOL_CALL_MARKUP = %r{<tool_call>.*?(?:</tool_call>|\z)}m
+
     def messages
-      content = message_choice&.dig("content")
+      content = message_choice&.dig("content").to_s.gsub(TOOL_CALL_MARKUP, "").strip
       return [] if content.blank?
 
       [

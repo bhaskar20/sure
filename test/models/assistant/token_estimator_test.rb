@@ -37,4 +37,14 @@ class Assistant::TokenEstimatorTest < ActiveSupport::TestCase
     assert Assistant::TokenEstimator.estimate(12345) > 0
     assert Assistant::TokenEstimator.estimate(:symbol) > 0
   end
+
+  test "estimate_data counts each digit as a token" do
+    # 40 letters / 4 = 10, plus 60 digits = 70 tokens, × 1.25 safety factor, ceil = 88
+    assert_equal 88, Assistant::TokenEstimator.estimate_data(("a" * 40) + ("1" * 60))
+  end
+
+  test "estimate_data serializes non-string values as JSON" do
+    assert_equal Assistant::TokenEstimator.estimate_data({ values: [ 1.5, 2.25 ] }.to_json),
+      Assistant::TokenEstimator.estimate_data({ values: [ 1.5, 2.25 ] })
+  end
 end

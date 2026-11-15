@@ -76,4 +76,19 @@ class Provider::Openai::GenericChatParserTest < ActiveSupport::TestCase
     assert_equal "get_holdings", request.function_name
     assert_equal extra, request.extra_content
   end
+
+  test "drops tool-call markup a model wrote as text" do
+    parse = ->(content) do
+      Provider::Openai::GenericChatParser.new(
+        "id" => "chatcmpl-1", "choices" => [ { "message" => { "role" => "assistant", "content" => content } } ]
+      ).parsed
+    end
+
+    only_markup = parse.call(%(<tool_call> {"name": "get_transactions", "arguments": {}} </tool_call>))
+    assert_empty only_markup.messages
+    assert_empty only_markup.function_requests
+
+    answer = parse.call(%(Your DBS balance is SG$19,008.\n<tool_call> {"name": "get_accounts"))
+    assert_equal "Your DBS balance is SG$19,008.", answer.messages.first.output_text
+  end
 end
