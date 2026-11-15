@@ -9,13 +9,15 @@
 #   desktop/scripts/local-rails.sh --dev desktop:dev_seed    # seed `npm run dev:local`
 #   desktop/scripts/local-rails.sh --agent desktop:dev_seed  # seed `npm run dev:agent`
 #
-# SURE_APP (default /Applications/Sure.app) picks the installed app to use.
+# SURE_APP (default /Applications/Sure.app) picks the installed app to use; its
+# bundle identifier picks the data folder (a local "Sure Dev" build has its own).
 # --dev targets this checkout's dev app instead: its data folder and desktop/runtime/.
 set -euo pipefail
 
 APP="${SURE_APP:-/Applications/Sure.app}"
 RT="$APP/Contents/Resources/runtime"
-DATA="$HOME/Library/Application Support/app.sure.desktop/local"
+APP_ID="$(defaults read "$APP/Contents/Info.plist" CFBundleIdentifier 2>/dev/null || echo app.sure.desktop)"
+DATA="$HOME/Library/Application Support/$APP_ID/local"
 if [ "${1:-}" = "--dev" ] || [ "${1:-}" = "--agent" ]; then
   suffix=""
   [ "$1" = "--agent" ] && suffix="-agent"
