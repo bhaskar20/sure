@@ -10,14 +10,15 @@ class Desktop::DevSessionsController < ApplicationController
   before_action :require_dev_login_token
 
   def index
-    users = User.includes(:family).order(:email)
+    # Emails are encrypted, so the database cannot sort them.
+    users = User.includes(:family).to_a.sort_by(&:email)
     render json: users.map { |user|
       { email: user.email, name: user.display_name, role: user.role, family: user.family&.name.to_s }
     }
   end
 
   def create
-    user = User.find_by(email: params[:email].to_s)
+    user = User.find_by_email_with_legacy_fallback(params[:email])
     return head :not_found unless user && create_session_for(user)
 
     redirect_to root_path
