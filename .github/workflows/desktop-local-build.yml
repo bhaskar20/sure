@@ -6,7 +6,7 @@ name: Desktop (local-only) Build
 # Mac builds are made locally (see desktop/README.md: npm run runtime:mac /
 # build:mac); CI builds them only when a manual run asks for it. Windows,
 # which can't be built on a Mac, builds on every run. desktop-publish.yml calls
-# this workflow to build the DMGs it releases on every push to main.
+# this workflow to build the DMGs it attaches to a published desktop release.
 on:
   workflow_dispatch:
     inputs:
@@ -16,6 +16,10 @@ on:
         default: false
   workflow_call:
     inputs:
+      ref:
+        description: "Git ref to build (defaults to the triggering ref)"
+        type: string
+        default: ""
       version:
         description: "App version to stamp into the build (e.g. 0.1.42)"
         type: string
@@ -26,8 +30,9 @@ on:
       windows:
         type: boolean
         default: false
+  # CI-only tags; release tags (desktop-v1.2.3) build through desktop-publish.yml.
   push:
-    tags: ["desktop-v*"]
+    tags: ["desktop-v*-ci*"]
 
 permissions:
   contents: read
@@ -56,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -105,7 +111,14 @@ jobs:
           for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             [ -n "${!v}" ] || unset "$v"
           done
-          npx tauri build --config src-tauri/tauri.local.conf.json --target ${{ matrix.rust_target }}
+          # DMG packaging (hdiutil) intermittently hangs and fails on hosted
+          # runners; the app build is cached, so a retry costs only packaging.
+          for attempt in 1 2 3; do
+            npx tauri build --verbose --config src-tauri/tauri.local.conf.json --target ${{ matrix.rust_target }} && exit 0
+            echo "::warning::DMG build attempt $attempt failed"
+            hdiutil info | grep -E '^/dev/' | awk '{print $1}' | xargs -n1 hdiutil detach -force 2>/dev/null || true
+          done
+          exit 1
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -122,6 +135,7 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
 
       # The runner image ships MSYS2 at C:\msys64, which is also where
