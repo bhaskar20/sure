@@ -1,0 +1,306 @@
+:root {
+	color-scheme: light dark;
+	--bg: #ffffff;
+	--fg: #141414;
+	--muted: #5c5c5c;
+	--border: #e5e5e5;
+	--surface: #fafafa;
+	--accent: #141414;
+	--accent-fg: #ffffff;
+	--error: #c4320a;
+	--success: #079455;
+	--notice: #fef6e7;
+	font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #171717;
+		--fg: #f5f5f5;
+		--muted: #a3a3a3;
+		--border: #333333;
+		--surface: #1f1f1f;
+		--accent: #f5f5f5;
+		--accent-fg: #171717;
+		--error: #f97066;
+		--success: #47cd89;
+		--notice: #2e2512;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+}
+
+main {
+	max-width: 1040px;
+	padding: 16px;
+}
+
+h1 {
+	font-size: 20px;
+	margin: 0 0 4px;
+}
+
+h2 {
+	font-size: 15px;
+	margin: 20px 0 8px;
+}
+
+p {
+	margin: 4px 0;
+}
+
+.muted {
+	color: var(--muted);
+}
+
+.small {
+	font-size: 12px;
+}
+
+.error,
+.negative {
+	color: var(--error);
+}
+
+.positive {
+	color: var(--success);
+}
+
+.strong {
+	font-weight: 600;
+}
+
+.notice {
+	background: var(--notice);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 8px 12px;
+	margin: 12px 0;
+}
+
+.tabs {
+	display: flex;
+	gap: 4px;
+	border-bottom: 1px solid var(--border);
+	margin: 16px 0;
+	overflow-x: auto;
+}
+
+.tabs button {
+	border: none;
+	background: none;
+	color: var(--muted);
+	padding: 8px 12px;
+	border-bottom: 2px solid transparent;
+	cursor: pointer;
+	font: inherit;
+	white-space: nowrap;
+}
+
+.tabs button[aria-selected="true"] {
+	color: var(--fg);
+	border-bottom-color: var(--fg);
+	font-weight: 600;
+}
+
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	align-items: flex-end;
+	margin: 12px 0;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 12px;
+	color: var(--muted);
+}
+
+.field.grow {
+	flex: 1 1 240px;
+}
+
+input,
+select {
+	font: inherit;
+	color: var(--fg);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 6px 8px;
+	min-width: 0;
+}
+
+input:disabled,
+select:disabled {
+	opacity: 0.5;
+}
+
+button.primary,
+button.secondary {
+	font: inherit;
+	border-radius: 6px;
+	padding: 7px 14px;
+	cursor: pointer;
+	border: 1px solid var(--accent);
+}
+
+button.primary {
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+
+button.secondary {
+	background: var(--bg);
+	color: var(--fg);
+	border-color: var(--border);
+}
+
+button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+button.link {
+	border: none;
+	background: none;
+	padding: 0;
+	font: inherit;
+	font-size: 12px;
+	color: var(--fg);
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+button.link.muted {
+	color: var(--muted);
+}
+
+.entry-list {
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+.entry {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 180px 150px;
+	gap: 12px;
+	align-items: center;
+	padding: 8px 12px;
+	border-top: 1px solid var(--border);
+}
+
+.entry:first-child {
+	border-top: none;
+}
+
+.entry-actions {
+	display: flex;
+	gap: 12px;
+}
+
+.value-input {
+	text-align: right;
+	width: 100%;
+}
+
+.summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	align-items: baseline;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 10px 12px;
+	margin: 16px 0;
+}
+
+.summary .big {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+th,
+td {
+	text-align: left;
+	padding: 6px 10px;
+	border-top: 1px solid var(--border);
+	vertical-align: middle;
+}
+
+thead th {
+	border-top: none;
+	font-size: 12px;
+	color: var(--muted);
+	font-weight: 500;
+	background: var(--surface);
+}
+
+.num {
+	text-align: right;
+	white-space: nowrap;
+}
+
+#mapping input.name {
+	width: 170px;
+}
+
+progress {
+	width: 100%;
+	margin: 8px 0;
+}
+
+.log {
+	padding-left: 20px;
+	font-size: 12px;
+	max-height: 280px;
+	overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+	.entry {
+		grid-template-columns: 1fr;
+		gap: 4px;
+	}
+}
+
+details {
+	margin: 8px 0;
+}
+
+textarea {
+	display: block;
+	width: 100%;
+	margin: 8px 0;
+	font: 12px ui-monospace, monospace;
+	color: var(--fg);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 6px 8px;
+}
