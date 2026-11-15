@@ -1,11 +1,6 @@
 require "test_helper"
 
 class Settings::LocalAisControllerTest < ActionDispatch::IntegrationTest
-  setup do
-    # Local AI is instance-wide, like the instance settings under Self-Hosting.
-    users(:family_admin).update!(role: :super_admin)
-  end
-
   test "shows the local AI page inside Sure Desktop" do
     sign_in users(:family_admin)
 
@@ -40,12 +35,14 @@ class Settings::LocalAisControllerTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
-  test "is only for people who manage instance settings" do
+  test "is available to every signed-in user, not only admins" do
     sign_in users(:family_member)
 
     with_desktop { get settings_local_ai_path }
+    assert_response :success
 
-    assert_redirected_to settings_preferences_path
+    with_desktop { get settings_preferences_path }
+    assert_select "a[href='#{settings_local_ai_path}']"
   end
 
   private
