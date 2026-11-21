@@ -42,6 +42,16 @@ module Provider::LlmConcept
     false
   end
 
+  # Whether process_pdf can read a text PDF without vision support.
+  def supports_pdf_text_extraction?(model: nil)
+    false
+  end
+
+  # Whether process_pdf can handle a PDF at all, by vision or extracted text.
+  def can_process_pdf?
+    supports_pdf_processing? || supports_pdf_text_extraction?
+  end
+
   def process_pdf(pdf_content:, family: nil)
     raise NotImplementedError, "Provider does not support PDF processing"
   end

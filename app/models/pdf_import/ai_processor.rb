@@ -8,7 +8,8 @@ class PdfImport::AiProcessor
   def process
     require_ai_for_extraction!
     provider = route_provider
-    raise Provider::Error, I18n.t("imports.pdf_import.errors.provider_no_pdf_support") unless provider.supports_pdf_processing?
+    # Vision or, for a model without it (a local one), the PDF's extracted text.
+    raise Provider::Error, I18n.t("imports.pdf_import.errors.provider_no_pdf_support") unless provider.can_process_pdf?
 
     response = provider.process_pdf(
       pdf_content: pdf_import.pdf_file_content,

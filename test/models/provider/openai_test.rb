@@ -42,6 +42,33 @@ class Provider::OpenaiTest < ActiveSupport::TestCase
     end
   end
 
+  test "process_pdf reads extracted text when the endpoint has no PDF or vision support" do
+    with_env_overrides("OPENAI_SUPPORTS_PDF_PROCESSING" => "false") do
+      provider = Provider::Openai.new("test-token", uri_base: "http://127.0.0.1:8080/v1", model: "sure-local")
+      result = Provider::LlmConcept::PdfProcessingResult.new(summary: "Statement", document_type: "bank_statement", extracted_data: {})
+      processor = mock
+      processor.expects(:process).returns(result)
+      Provider::Openai::PdfProcessor.expects(:new).with { |*args| args.last[:processing_mode] == :text }.returns(processor)
+
+      assert_not provider.supports_pdf_processing?
+      assert provider.supports_pdf_text_extraction?
+      assert provider.can_process_pdf?
+
+      response = provider.process_pdf(pdf_content: "synthetic PDF")
+      assert response.success?
+      assert_equal "bank_statement", response.data.document_type
+    end
+  end
+
+  test "process_pdf keeps the vision fallback for vision-capable models" do
+    result = Provider::LlmConcept::PdfProcessingResult.new(summary: "Doc", document_type: "other", extracted_data: {})
+    processor = mock
+    processor.expects(:process).returns(result)
+    Provider::Openai::PdfProcessor.expects(:new).with { |*args| args.last[:processing_mode] == :auto }.returns(processor)
+
+    assert @openai.process_pdf(pdf_content: "synthetic PDF", model: "gpt-4.1").success?
+  end
+
   test "GPT-6.1 Sol sends assistant tools through Responses with supported request parameters" do
     with_env_overrides("OPENAI_SUPPORTS_RESPONSES_ENDPOINT" => nil) do
       fake_responses = mock

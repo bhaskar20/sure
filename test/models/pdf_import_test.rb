@@ -104,6 +104,33 @@ class PdfImportTest < ActiveSupport::TestCase
     assert @import.valid?
   end
 
+  test "process_with_ai uses a provider that can only read extracted text" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    result = Provider::LlmConcept::PdfProcessingResult.new(summary: "Monthly statement", document_type: "bank_statement", extracted_data: {})
+    provider = mock
+    provider.stubs(:can_process_pdf?).returns(true)
+    provider.expects(:process_pdf).returns(Provider::Response.new(success?: true, data: result, error: nil))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    import.process_with_ai
+
+    assert_equal "Monthly statement", import.reload.ai_summary
+    assert_equal "bank_statement", import.document_type
+  end
+
+  test "process_with_ai refuses a provider that cannot read PDFs at all" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    provider = mock
+    provider.stubs(:can_process_pdf?).returns(false)
+    provider.expects(:process_pdf).never
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    error = assert_raises(Provider::Error) { import.process_with_ai }
+    assert_equal I18n.t("imports.pdf_import.errors.provider_no_pdf_support"), error.message
+  end
+
   test "process_with_ai_later enqueues ProcessPdfJob" do
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
 
