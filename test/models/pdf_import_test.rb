@@ -151,6 +151,24 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_equal 3, import.reload.extracted_transactions.size
   end
 
+  test "extract_transactions reads a dated transaction history without the LLM" do
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "bank_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
+      Saturday, 15 Nov 2026
+      COFFEE PLACE                              SGD - 4.50
+      BOOK SHOP                                 SGD - 12.00
+      Thursday, 13 Nov 2026
+      SALARY EXAMPLE CO                         SGD 2,500.00
+    TEXT
+    Provider::Registry.expects(:preferred_llm_provider).never
+
+    data = import.extract_transactions
+
+    assert_equal [ -4.5, -12.0, 2500.0 ], data["transactions"].map { |t| t["amount"] }
+    assert_equal %w[2026-11-15 2026-11-15 2026-11-13], data["transactions"].map { |t| t["date"] }
+  end
+
   test "extract_transactions falls back to the LLM when the text does not reconcile" do
     Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)

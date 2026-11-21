@@ -42,11 +42,12 @@ class PdfImport::AiProcessor
     data
   end
 
-  # A statement whose rows reconcile against its own balances is read exactly
-  # by rules; only the rest needs a model.
+  # A statement whose rows reconcile against its own balances, or a dated
+  # transaction history, is read exactly by rules; only the rest needs a model.
   def extract_transactions_with_rules
     pages = Pdf::TextExtractor.pages(pdf_import.pdf_file_content)
-    result = Pdf::StatementParser.parse(pages, liability: pdf_import.credit_card_statement?)
+    result = Pdf::StatementParser.parse(pages, liability: pdf_import.credit_card_statement?) ||
+      Pdf::TransactionHistoryParser.parse(pages)
     return unless result
 
     Rails.logger.info("PdfImport #{pdf_import.id}: rule-based parser read #{result.transactions.size} rows")

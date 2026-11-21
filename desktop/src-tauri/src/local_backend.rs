@@ -115,6 +115,10 @@ impl Runtime {
     pub fn ca_bundle(&self) -> PathBuf {
         self.root.join("ssl").join("cacert.pem")
     }
+    /// sure-ocr, which reads image-only PDF statements on device (macOS only).
+    pub fn ocr(&self) -> PathBuf {
+        self.root.join("ocr").join("sure-ocr")
+    }
 }
 
 /// The data folder layout.
@@ -679,6 +683,9 @@ pub fn rails_env(rt: &Runtime, data: &DataDir, secrets: &Secrets) -> Vec<(String
     ];
     if rt.ca_bundle().is_file() {
         env.push(("SSL_CERT_FILE", p(rt.ca_bundle())));
+    }
+    if rt.ocr().is_file() {
+        env.push(("PDF_OCR_COMMAND", p(rt.ocr())));
     }
     let ruby_bin = rt.ruby().parent().map(Path::to_path_buf).unwrap_or_default();
     let sep = if cfg!(windows) { ";" } else { ":" };

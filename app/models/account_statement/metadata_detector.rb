@@ -160,7 +160,9 @@ class AccountStatement::MetadataDetector
     # top of a statement. Any reader failure leaves filename detection as the
     # fallback instead of failing the upload.
     def pdf_text
-      Pdf::TextExtractor.pages(content, max_pages: MAX_PDF_METADATA_PAGES).join("\n")
+      # Runs while the upload request waits, so no OCR: an image-only PDF
+      # keeps its filename metadata, and the import reads it with OCR later.
+      Pdf::TextExtractor.pages(content, max_pages: MAX_PDF_METADATA_PAGES, ocr: false).join("\n")
     rescue StandardError => e
       Rails.logger.info("AccountStatement::MetadataDetector - PDF text unavailable: #{e.class}")
       ""

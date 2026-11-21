@@ -34,6 +34,19 @@ class AccountStatementTest < ActiveSupport::TestCase
     end
   end
 
+  test "an image-only PDF upload does not wait for OCR" do
+    PDF::Reader.any_instance.stubs(:pages).returns([ stub(text: "Page 1 of 1") ])
+    Pdf::Ocr.expects(:pages).never
+
+    statement = AccountStatement.create_from_upload!(
+      family: @family,
+      account: @account,
+      file: uploaded_file(filename: "scan.pdf", content_type: "application/pdf", content: file_fixture("imports/sample_bank_statement.pdf").binread)
+    )
+
+    assert statement.persisted?
+  end
+
   test "creates linked statement from upload without importing transactions" do
     assert_no_difference [ "Import.count", "Entry.count", "Transaction.count" ] do
       statement = AccountStatement.create_from_upload!(
