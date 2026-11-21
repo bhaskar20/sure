@@ -2,13 +2,19 @@ class Provider::Openai::BankStatementExtractor
   include Provider::Openai::Concerns::JsonMode
 
   MAX_CHARS_PER_CHUNK = 3000
+  # Balance checks needed before trusting the balance column over the model's signs.
+  MIN_BALANCE_CHECKS = 3
   attr_reader :client, :pdf_content, :model, :json_mode
 
-  def initialize(client:, pdf_content:, model:, json_mode: nil)
+  # liability: true for a credit card statement, false for a bank account,
+  # nil when the caller does not know. It sets which way a running balance
+  # moves with money in.
+  def initialize(client:, pdf_content:, model:, json_mode: nil, liability: nil)
     @client = client
     @pdf_content = pdf_content
     @model = model
     @json_mode = json_mode || default_json_mode
+    @liability = liability
   end
 
   def extract
@@ -49,8 +55,10 @@ class Provider::Openai::BankStatementExtractor
       end
     end
 
+    transactions = correct_signs_from_balances(deduplicate_transactions(all_transactions), metadata[:opening_balance])
+
     {
-      transactions: deduplicate_transactions(all_transactions),
+      transactions: transactions,
       period: metadata[:period] || {},
       account_holder: metadata[:account_holder],
       account_number: metadata[:account_number],
@@ -65,8 +73,7 @@ class Provider::Openai::BankStatementExtractor
     def extract_pages_from_pdf
       return [] if pdf_content.blank?
 
-      reader = PDF::Reader.new(StringIO.new(pdf_content))
-      reader.pages.map(&:text).reject(&:blank?)
+      Pdf::TextExtractor.pages(pdf_content).reject(&:blank?)
     rescue => e
       Rails.logger.error("Failed to extract text from PDF: #{e.message}")
       []
@@ -141,21 +148,17 @@ class Provider::Openai::BankStatementExtractor
     end
 
     def deduplicate_transactions(transactions)
-      # Deduplicates transactions that appear in consecutive chunks (chunking artifacts).
+      # Deduplicates transactions repeated in the next chunk (chunking artifacts).
       #
       # KNOWN LIMITATION: Legitimate duplicate transactions (same date, amount, merchant)
-      # that happen to appear in adjacent chunks will be incorrectly deduplicated.
-      # This is an acceptable trade-off since chunking artifacts are more common than
-      # true same-day duplicates at chunk boundaries. Transactions within the same
-      # chunk are always preserved regardless of similarity.
+      # split across adjacent chunks will be incorrectly deduplicated. Repeats within
+      # one chunk, such as two identical top-ups on the same day, are always kept.
       seen = Set.new
       transactions.select do |t|
-        # Create key without chunk_index for deduplication
         key = [ t[:date], t[:amount], t[:name], t[:chunk_index] ]
 
-        # Check if we've seen this exact transaction in a different chunk
         duplicate = seen.any? do |prev_key|
-          prev_key[0..2] == key[0..2] && (prev_key[3] - key[3]).abs <= 1
+          prev_key[0..2] == key[0..2] && key[3] - prev_key[3] == 1
         end
 
         seen << key
@@ -163,11 +166,48 @@ class Provider::Openai::BankStatementExtractor
       end.map { |t| t.except(:chunk_index) }
     end
 
+    # The running balance settles each row's direction more reliably than the
+    # model, which can be misled by wording ("FAST Collection" is money out).
+    # Rows whose balance change equals their amount are balance-checked. A
+    # bank balance rises with money in and a card balance with charges, so
+    # when the caller says which this is and most checked rows already agree,
+    # the few that disagree are flipped. When most disagree, the statement
+    # prints its balance some other way (an owed balance as a negative number)
+    # or the model returned unsigned amounts, and the signs are left alone, as
+    # they are when the caller does not know the account type. Rows without a
+    # usable balance keep the model's sign.
+    def correct_signs_from_balances(transactions, opening_balance)
+      # Balances run forward in time; a newest-first list is checked oldest
+      # first, from the opening balance.
+      newest_first = transactions.first&.dig(:date).to_s > transactions.last&.dig(:date).to_s
+      return correct_signs_from_balances(transactions.reverse, opening_balance).reverse if newest_first
+
+      previous = parse_balance(opening_balance)
+      deltas = transactions.map do |t|
+        balance = t[:balance]
+        delta = balance && previous && (balance - previous).round(2)
+        previous = balance if balance
+        next nil unless delta && t[:amount] && t[:amount].nonzero? && (delta.abs - t[:amount].abs).abs < 0.005
+
+        delta
+      end
+
+      checked = transactions.zip(deltas).select { |_, delta| delta }
+      unless @liability.nil? || checked.size < MIN_BALANCE_CHECKS
+        rises_with_inflow = !@liability
+        disagreeing = checked.reject { |t, delta| t[:amount].positive? == (rises_with_inflow ? delta.positive? : delta.negative?) }
+        disagreeing.each { |t, _| t[:amount] = -t[:amount] } if disagreeing.size * 2 < checked.size
+      end
+
+      transactions.map { |t| t.except(:balance) }
+    end
+
     def normalize_transactions(transactions)
       transactions.map do |txn|
         {
           date: parse_date(txn["date"]),
           amount: parse_amount(txn["amount"]),
+          balance: parse_balance(txn["balance"]),
           name: txn["description"] || txn["name"] || txn["merchant"],
           category: infer_category(txn),
           notes: txn["reference"] || txn["notes"]
@@ -193,6 +233,25 @@ class Provider::Openai::BankStatementExtractor
       end
     end
 
+    # A balance as printed: "1,050.00 DR", "35.00Dr." or OD is overdrawn on a
+    # bank account and "50.00 CR" is in credit on a card; "35.00-" and
+    # "(35.00)" are below zero.
+    def parse_balance(balance)
+      return nil if balance.nil? || balance.to_s.strip.empty?
+
+      value = parse_amount(balance)
+      return value if value.nil? || balance.is_a?(Numeric)
+
+      text = balance.to_s.strip
+      if (marker = text[/(DR|OD|CR)\.?\z/i, 1]&.upcase)
+        below_zero = @liability ? marker == "CR" : marker.in?(%w[DR OD])
+        return below_zero ? -value.abs : value.abs
+      end
+      return -value.abs if text.end_with?("-") || (text.start_with?("(") && text.end_with?(")"))
+
+      value
+    end
+
     def infer_category(txn)
       txn["category"] || txn["type"]
     end
@@ -200,18 +259,18 @@ class Provider::Openai::BankStatementExtractor
     def instructions_with_metadata
       <<~INSTRUCTIONS.strip
         Extract bank statement data as JSON. Return:
-        {"bank_name":"...","account_holder":"...","account_number":"last 4 digits","statement_period":{"start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD"},"opening_balance":0.00,"closing_balance":0.00,"transactions":[{"date":"YYYY-MM-DD","description":"...","amount":-0.00}]}
+        {"bank_name":"...","account_holder":"...","account_number":"last 4 digits","statement_period":{"start_date":"YYYY-MM-DD","end_date":"YYYY-MM-DD"},"opening_balance":0.00,"closing_balance":0.00,"transactions":[{"date":"YYYY-MM-DD","description":"...","amount":-0.00,"balance":0.00}]}
 
-        Rules: Negative amounts for debits/expenses, positive for credits/deposits. Dates as YYYY-MM-DD. Extract ALL transactions. JSON only, no markdown.
+        Rules: Negative amounts for debits/expenses/withdrawals, positive for credits/deposits. balance is the running balance printed on the row, or null if none. Dates as YYYY-MM-DD. Extract ALL transactions. JSON only, no markdown.
       INSTRUCTIONS
     end
 
     def instructions_transactions_only
       <<~INSTRUCTIONS.strip
         Extract transactions from bank statement text as JSON. Return:
-        {"transactions":[{"date":"YYYY-MM-DD","description":"...","amount":-0.00}]}
+        {"transactions":[{"date":"YYYY-MM-DD","description":"...","amount":-0.00,"balance":0.00}]}
 
-        Rules: Negative amounts for debits/expenses, positive for credits/deposits. Dates as YYYY-MM-DD. Extract ALL transactions. JSON only, no markdown.
+        Rules: Negative amounts for debits/expenses/withdrawals, positive for credits/deposits. balance is the running balance printed on the row, or null if none. Dates as YYYY-MM-DD. Extract ALL transactions. JSON only, no markdown.
       INSTRUCTIONS
     end
 end

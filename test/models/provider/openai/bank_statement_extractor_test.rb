@@ -138,6 +138,175 @@ class Provider::Openai::BankStatementExtractorTest < ActiveSupport::TestCase
     assert_includes names, "Gas Station"
   end
 
+  test "keeps identical transactions within one chunk" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "transactions" => [
+        { "date" => "2024-01-22", "description" => "Funds Transfer", "amount" => -3.50 },
+        { "date" => "2024-01-22", "description" => "Funds Transfer", "amount" => -3.50 }
+      ]
+    }.to_json))
+
+    result = build_extractor.extract
+
+    assert_equal [ -3.50, -3.50 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "flips a sign the running balance contradicts on a bank statement" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 1000.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Top-up", "amount" => -10.00, "balance" => 990.00 },
+        { "date" => "2024-01-03", "description" => "Salary", "amount" => 500.00, "balance" => 1490.00 },
+        { "date" => "2024-01-04", "description" => "FAST Collection", "amount" => 400.00, "balance" => 1090.00 },
+        { "date" => "2024-01-05", "description" => "Bill Payment", "amount" => -90.00, "balance" => 1000.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ -10.00, 500.00, -400.00, -90.00 ], result[:transactions].map { |t| t[:amount] }
+    assert result[:transactions].none? { |t| t.key?(:balance) }
+  end
+
+  test "follows a credit card balance that rises with charges" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 200.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Grocer", "amount" => -50.00, "balance" => 250.00 },
+        { "date" => "2024-01-03", "description" => "Airline", "amount" => -300.00, "balance" => 550.00 },
+        { "date" => "2024-01-04", "description" => "Payment received", "amount" => 200.00, "balance" => 350.00 },
+        { "date" => "2024-01-05", "description" => "Refund credit", "amount" => -20.00, "balance" => 330.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: true).extract
+
+    assert_equal [ -50.00, -300.00, 200.00, 20.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "keeps the model's signs when too few rows can be balance-checked" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 1000.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Collection", "amount" => 100.00, "balance" => 900.00 },
+        { "date" => "2024-01-03", "description" => "Coffee", "amount" => -4.00 },
+        { "date" => "2024-01-04", "description" => "Misread", "amount" => -7.00, "balance" => 123.45 }
+      ]
+    }.to_json))
+
+    result = build_extractor.extract
+
+    assert_equal [ 100.00, -4.00, -7.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "keeps unsigned amounts as they are, since most rows disagree with any convention" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 1000.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Top-up", "amount" => 10.00, "balance" => 990.00 },
+        { "date" => "2024-01-03", "description" => "Rent", "amount" => 400.00, "balance" => 590.00 },
+        { "date" => "2024-01-04", "description" => "Salary", "amount" => 500.00, "balance" => 1090.00 },
+        { "date" => "2024-01-05", "description" => "Bill Payment", "amount" => 90.00, "balance" => 1000.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ 10.00, 400.00, 500.00, 90.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "fixes a single mis-signed row when the caller says it is a bank account" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 1000.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Top-up", "amount" => -10.00, "balance" => 990.00 },
+        { "date" => "2024-01-03", "description" => "Rent", "amount" => -400.00, "balance" => 590.00 },
+        { "date" => "2024-01-04", "description" => "FAST Collection salary", "amount" => -500.00, "balance" => 1090.00 },
+        { "date" => "2024-01-05", "description" => "Bill Payment", "amount" => -90.00, "balance" => 1000.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ -10.00, -400.00, 500.00, -90.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "follows a card balance that rises with charges when the caller says it is a card" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 200.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Grocer", "amount" => 50.00, "balance" => 250.00 },
+        { "date" => "2024-01-03", "description" => "Airline", "amount" => -300.00, "balance" => 550.00 },
+        { "date" => "2024-01-04", "description" => "Payment received", "amount" => 200.00, "balance" => 350.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: true).extract
+
+    assert_equal [ -50.00, -300.00, 200.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "keeps the signs of a card that prints what is owed as a negative balance" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => -200.00,
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "Grocer", "amount" => -50.00, "balance" => -250.00 },
+        { "date" => "2024-01-03", "description" => "Airline", "amount" => -50.00, "balance" => -300.00 },
+        { "date" => "2024-01-04", "description" => "Payment received", "amount" => 200.00, "balance" => -100.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: true).extract
+
+    assert_equal [ -50.00, -50.00, 200.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "reads an overdrawn balance marked DR" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => "1,000.00 DR",
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "ATM", "amount" => -50.00, "balance" => "1,050.00 DR" },
+        { "date" => "2024-01-03", "description" => "Card purchase", "amount" => -20.00, "balance" => "1,070.00 DR" },
+        { "date" => "2024-01-04", "description" => "Salary", "amount" => -900.00, "balance" => "170.00 DR" }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ -50.00, -20.00, 900.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "reads balance markers written against the number" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => "1,000.00DR",
+      "transactions" => [
+        { "date" => "2024-01-02", "description" => "ATM", "amount" => -50.00, "balance" => "1,050.00Dr." },
+        { "date" => "2024-01-03", "description" => "Card purchase", "amount" => -20.00, "balance" => "1,070.00-" },
+        { "date" => "2024-01-04", "description" => "Salary", "amount" => -900.00, "balance" => "(170.00)" }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ -50.00, -20.00, 900.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
+  test "checks a newest-first statement in date order" do
+    @client.expects(:chat).returns(chat_response(content: {
+      "opening_balance" => 1000.00,
+      "transactions" => [
+        { "date" => "2024-01-05", "description" => "Bill Payment", "amount" => -90.00, "balance" => 1000.00 },
+        { "date" => "2024-01-04", "description" => "FAST Collection salary", "amount" => -500.00, "balance" => 1090.00 },
+        { "date" => "2024-01-03", "description" => "Rent", "amount" => -400.00, "balance" => 590.00 },
+        { "date" => "2024-01-02", "description" => "Top-up", "amount" => -10.00, "balance" => 990.00 }
+      ]
+    }.to_json))
+
+    result = build_extractor(liability: false).extract
+
+    assert_equal [ -90.00, 500.00, -400.00, -10.00 ], result[:transactions].map { |t| t[:amount] }
+  end
+
   test "normalizes transaction amounts" do
     mock_response = {
       "choices" => [ {
@@ -256,12 +425,13 @@ class Provider::Openai::BankStatementExtractorTest < ActiveSupport::TestCase
       }
     end
 
-    def build_extractor(json_mode: nil)
+    def build_extractor(json_mode: nil, liability: nil)
       extractor = Provider::Openai::BankStatementExtractor.new(
         client: @client,
         pdf_content: "dummy",
         model: @model,
-        json_mode: json_mode
+        json_mode: json_mode,
+        liability: liability
       )
       extractor.stubs(:extract_pages_from_pdf).returns([ "Page 1 text" ])
       extractor

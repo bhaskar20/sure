@@ -38,7 +38,8 @@ class PdfImport::AiProcessor
 
     response = provider.extract_bank_statement(
       pdf_content: pdf_import.pdf_file_content,
-      family: pdf_import.family
+      family: pdf_import.family,
+      liability: pdf_import.credit_card_statement?
     )
 
     unless response.success?

@@ -247,7 +247,9 @@ class Provider::Anthropic < Provider
     end
   end
 
-  def extract_bank_statement(pdf_content:, model: "", family: nil)
+  # liability: accepted for the same call as Provider::Openai; this extractor
+  # takes the signs the model returns.
+  def extract_bank_statement(pdf_content:, model: "", family: nil, liability: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
 

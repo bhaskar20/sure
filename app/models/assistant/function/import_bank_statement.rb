@@ -106,7 +106,8 @@ class Assistant::Function::ImportBankStatement < Assistant::Function
     response = provider.extract_bank_statement(
       pdf_content: pdf_import.pdf_file_content,
       model: model_for(provider),
-      family: family
+      family: family,
+      liability: account.classification == "liability"
     )
 
     unless response.success?

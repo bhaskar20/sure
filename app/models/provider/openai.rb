@@ -427,7 +427,7 @@ class Provider::Openai < Provider
     end
   end
 
-  def extract_bank_statement(pdf_content:, model: "", family: nil, json_mode: nil)
+  def extract_bank_statement(pdf_content:, model: "", family: nil, json_mode: nil, liability: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
 
@@ -440,7 +440,8 @@ class Provider::Openai < Provider
         client: client,
         pdf_content: pdf_content,
         model: effective_model,
-        json_mode: json_mode
+        json_mode: json_mode,
+        liability: liability
       ).extract
 
       finish_langfuse_trace(trace: trace, output: { transaction_count: result[:transactions].size })
