@@ -12,6 +12,8 @@
 #     libvips/   libvips for image variants (avatars, logos, attachment previews):
 #                sharp's prebuilt, self-contained build, as libvips.42.dylib
 #     ssl/       CA bundle for outbound HTTPS from the bundled OpenSSL
+#     ocr/       sure-ocr, which reads image-only PDF statements with Apple's
+#                Vision framework (built from desktop/ocr/sure-ocr.swift)
 #
 # Build on the architecture you are targeting (an Apple Silicon Mac for arm64,
 # an Intel Mac or runner for x86_64). Requires Xcode command line tools and git.
@@ -74,6 +76,12 @@ psych=--with-libyaml-dir=$DEPS" \
     fi
   done < <(find "$OUT/app/vendor/bundle" -type f -name '*.bundle' -print0)
   [ "$bad" = 0 ] || exit 1
+
+  # --- OCR helper ---------------------------------------------------------------
+  # Built here rather than with the other tools so --app-only picks up changes.
+  echo "==> sure-ocr"
+  mkdir -p "$OUT/ocr"
+  xcrun swiftc -O -target "$ARCH-apple-macos11" "$DESKTOP/ocr/sure-ocr.swift" -o "$OUT/ocr/sure-ocr"
 
   # --- Signing ------------------------------------------------------------------
   # Tauri signs the app bundle itself; the executables inside Resources must be

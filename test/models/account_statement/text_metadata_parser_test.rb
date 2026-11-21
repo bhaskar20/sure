@@ -249,4 +249,44 @@ class AccountStatement::TextMetadataParserTest < ActiveSupport::TestCase
     assert_nil AccountStatement::TextMetadataParser.parse("Invoice 2026-04 total 1.234,56 EUR due 15.05.2026")
     assert_nil AccountStatement::TextMetadataParser.parse("")
   end
+
+  test "reads the last four digits of a labelled account or card number" do
+    parser = AccountStatement::TextMetadataParser
+
+    assert_equal "7890", parser.account_last4("Savings Account   Account No. 123-456789-0")
+    assert_equal "1234", parser.account_last4("EVERYDAY CARD NO.: 4111 1111 1111 1234")
+    assert_equal "5678", parser.account_last4("Card number ending 5678")
+    assert_equal "9012", parser.account_last4("Acct # XXXX-XXXX-9012")
+    assert_equal "3000", parser.account_last4("IBAN: DE89 3704 0044 0532 0130 00")
+    assert_equal "7890", parser.account_last4("IBAN: DE89 3704 0044 0532 0130 00\nAccount No. 123-456789-0")
+  end
+
+  test "does not take a column heading, a small number or a date for an account number" do
+    parser = AccountStatement::TextMetadataParser
+
+    assert_nil parser.account_last4("CARD NUMBER   BALANCE AS OF")
+    assert_nil parser.account_last4("Account No.   Balance 1,234.56")
+    assert_nil parser.account_last4("Account no 12 of 30")
+    assert_equal "7890", parser.account_last4("Account No. 123-456789-0  01/10/2026")
+    assert_nil parser.account_last4("Account No. 123-456789-0 01/10/2026")
+    assert_nil parser.account_last4("CARD NO.: 4111 1111 1111 1234 15 Nov 2026")
+    assert_nil parser.account_last4("Card No. XXXX XXXX XXXX 1234 5000")
+  end
+
+  test "reads an Amex number and gives up where a number's end is unclear" do
+    parser = AccountStatement::TextMetadataParser
+
+    assert_equal "0005", parser.account_last4("Card No. 3782 822463 10005")
+    assert_nil parser.account_last4("Account Number: 123 456 789")
+    assert_nil parser.account_last4("Account No. 1234 5678 90")
+    assert_nil parser.account_last4("Account No. 1234567 890")
+    assert_nil parser.account_last4("Card No. XXXX XXXX XXXX 1234 1 of 3")
+  end
+
+  test "ignores the other party's account on a transaction line" do
+    parser = AccountStatement::TextMetadataParser
+
+    assert_equal "5678", parser.account_last4("Account Number: 12345678\n01 Apr  Transfer to IBAN GB29NWBK60161331926819   100.00")
+    assert_nil parser.account_last4("Account Number: ********\n02 Apr  Transfer to account no 98765432   50.00")
+  end
 end

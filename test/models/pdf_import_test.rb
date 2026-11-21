@@ -104,6 +104,89 @@ class PdfImportTest < ActiveSupport::TestCase
     assert @import.valid?
   end
 
+  test "process_with_ai uses a provider that can only read extracted text" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    result = Provider::LlmConcept::PdfProcessingResult.new(summary: "Monthly statement", document_type: "bank_statement", extracted_data: {})
+    provider = mock
+    provider.stubs(:can_process_pdf?).returns(true)
+    provider.expects(:process_pdf).returns(Provider::Response.new(success?: true, data: result, error: nil))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    import.process_with_ai
+
+    assert_equal "Monthly statement", import.reload.ai_summary
+    assert_equal "bank_statement", import.document_type
+  end
+
+  test "process_with_ai refuses a provider that cannot read PDFs at all" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    provider = mock
+    provider.stubs(:can_process_pdf?).returns(false)
+    provider.expects(:process_pdf).never
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    error = assert_raises(Provider::Error) { import.process_with_ai }
+    assert_equal I18n.t("imports.pdf_import.errors.provider_no_pdf_support"), error.message
+  end
+
+  test "extract_transactions reads a reconciling text statement without the LLM" do
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "credit_card_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
+      STATEMENT DATE 15 Nov 2026
+                PREVIOUS BALANCE                      40.00
+      07 NOV    BILL PAYMENT                          40.00 CR
+      08 NOV    COFFEE PLACE                           5.50
+      09 NOV    BOOK SHOP                             12.00
+      GRAND TOTAL FOR ALL CARD ACCOUNTS:              17.50
+    TEXT
+    Provider::Registry.expects(:preferred_llm_provider).never
+
+    data = import.extract_transactions
+
+    assert_equal [ 40.0, -5.5, -12.0 ], data["transactions"].map { |t| t["amount"] }
+    assert_equal 17.5, data["closing_balance"]
+    assert_equal 3, import.reload.extracted_transactions.size
+  end
+
+  test "extract_transactions reads a dated transaction history without the LLM" do
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "bank_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
+      Saturday, 15 Nov 2026
+      COFFEE PLACE                              SGD - 4.50
+      BOOK SHOP                                 SGD - 12.00
+      Thursday, 13 Nov 2026
+      SALARY EXAMPLE CO                         SGD 2,500.00
+    TEXT
+    Provider::Registry.expects(:preferred_llm_provider).never
+
+    data = import.extract_transactions
+
+    assert_equal [ -4.5, -12.0, 2500.0 ], data["transactions"].map { |t| t["amount"] }
+    assert_equal %w[2026-11-15 2026-11-15 2026-11-13], data["transactions"].map { |t| t["date"] }
+  end
+
+  test "extract_transactions falls back to the LLM when the text does not reconcile" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "bank_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ "Page 1 of 1" ])
+    provider = mock
+    provider.expects(:extract_bank_statement).returns(Provider::Response.new(
+      success?: true,
+      data: { transactions: [ { date: "2026-11-02", amount: -9.0, name: "Lunch" } ] },
+      error: nil
+    ))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    data = import.extract_transactions
+
+    assert_equal [ "Lunch" ], data["transactions"].map { |t| t["name"] }
+  end
+
   test "process_with_ai_later enqueues ProcessPdfJob" do
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
 
@@ -316,7 +399,134 @@ class PdfImportTest < ActiveSupport::TestCase
     assert import.errors[:account_statement].present?
   end
 
+  test "suggests the account of the statement's type that carries its last four digits" do
+    import = statement_import(document_type: "credit_card_statement", last4: "4321")
+    card = accounts(:credit_card)
+    card.update!(name: "Everyday Card ••4321")
+    accounts(:depository).update!(name: "Savings 4321")
+
+    suggestion = import.account_suggestion(@import.family.accounts)
+
+    assert_equal card, suggestion.account
+    assert_equal "4321", suggestion.last4
+  end
+
+  test "suggests nothing once an account is chosen, or for documents that are not statements" do
+    accounts(:credit_card).update!(name: "Card ••4321")
+    import = statement_import(document_type: "credit_card_statement", last4: "4321")
+
+    import.document_type = "financial_document"
+    assert_nil import.account_suggestion(@import.family.accounts)
+
+    import.document_type = "credit_card_statement"
+    import.account = accounts(:credit_card)
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "suggests the account created from the import when nothing else matches" do
+    import = statement_import(document_type: "bank_statement", last4: nil)
+    assert_nil import.account_suggestion(@import.family.accounts)
+
+    created = @import.family.accounts.create!(name: "New savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_equal created, import.account_suggestion(@import.family.accounts).account
+  end
+
+  test "does not suggest another card at the same bank whose digits differ" do
+    import = statement_import(document_type: "credit_card_statement", last4: "4321", institution: "Example Bank")
+    accounts(:credit_card).update!(name: "Example Bank Altitude ••9999", institution_name: "Example Bank")
+
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "does not take a newly created account from another bank for this statement" do
+    import = statement_import(document_type: "bank_statement", last4: nil, institution: "Example Bank")
+    @import.family.accounts.create!(name: "Other savings", institution_name: "Another Bank", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "a year in an account's name does not stop it being suggested" do
+    import = statement_import(document_type: "credit_card_statement", last4: "4321", institution: "Example Bank")
+    card = accounts(:credit_card)
+    card.update!(name: "Example Bank Visa 2024", institution_name: "Example Bank")
+
+    assert_equal card, import.account_suggestion(@import.family.accounts)&.account
+  end
+
+  test "does not take a newly created account named for another bank" do
+    import = statement_import(document_type: "bank_statement", last4: nil, institution: "Example Bank")
+    @import.family.accounts.create!(name: "Other Lender 360 Savings", balance: 0, currency: "USD", accountable: Depository.new)
+
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "does not suggest another bank's card that happens to show the same digits" do
+    import = statement_import(document_type: "credit_card_statement", last4: "2024", institution: "Example Bank")
+    accounts(:credit_card).update!(name: "Other Lender Rewards ••2024", institution_name: "Other Lender")
+
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "does not take a newly created account that only shares a place name with the bank" do
+    import = statement_import(document_type: "credit_card_statement", last4: nil, institution: "Standard Chartered Bank (Singapore) Limited")
+    @import.family.accounts.create!(name: "Citibank Singapore Rewards", balance: 0, currency: "USD", accountable: CreditCard.new)
+
+    assert_nil import.account_suggestion(@import.family.accounts)
+  end
+
+  test "new account starts at the statement's opening balance the day before its period" do
+    import = statement_import(document_type: "credit_card_statement", last4: "4321", institution: "Example Bank")
+    import.update!(extracted_data: { "period" => { "start_date" => "2026-10-16", "end_date" => "2026-11-15" }, "opening_balance" => 387.24, "transactions" => [] })
+
+    attributes = import.new_account_attributes
+
+    assert_equal "Example Bank Credit card ••4321", attributes[:name]
+    assert_equal "Example Bank", attributes[:institution_name]
+    assert_equal BigDecimal("387.24"), attributes[:balance]
+    assert_equal Date.new(2026, 10, 15), attributes[:opening_balance_date]
+  end
+
+  test "new account takes the currency printed on the statement, even as a symbol" do
+    import = statement_import(document_type: "credit_card_statement", last4: nil)
+    output = import.account_statement.sanitized_parser_output.merge("extracted_currency" => "S$")
+    import.account_statement.update_columns(sanitized_parser_output: output)
+
+    assert_equal "SGD", import.new_account_attributes[:currency]
+    assert_equal "EUR", PdfImport.iso_currency("eur")
+    assert_nil PdfImport.iso_currency("XX$")
+  end
+
+  test "new account leaves a printed opening balance it cannot read to the user" do
+    import = statement_import(document_type: "bank_statement", last4: nil)
+    import.update!(extracted_data: { "period" => { "start_date" => "2026-10-01" }, "opening_balance" => "1,050.00 DR", "transactions" => [] })
+    import.account_statement.update_columns(opening_balance: nil)
+
+    assert_nil import.new_account_attributes[:balance]
+  end
+
+  test "new account leaves the balance to the user when the statement has no opening balance" do
+    import = statement_import(document_type: "bank_statement", last4: nil)
+    import.update!(extracted_data: { "period" => { "start_date" => "2026-10-01" }, "transactions" => [] })
+    import.account_statement.update_columns(opening_balance: nil)
+
+    attributes = import.new_account_attributes
+
+    assert_nil attributes[:balance]
+    assert_nil attributes[:opening_balance_date]
+    assert_equal "Account", attributes[:name]
+  end
+
   private
+
+    def statement_import(document_type:, last4:, institution: nil)
+      statement = create_pdf_statement(account: nil)
+      output = (statement.sanitized_parser_output || {}).merge("extracted_institution" => institution).compact
+      statement.update_columns(account_last4_hint: last4, institution_name_hint: nil, account_name_hint: nil, sanitized_parser_output: output)
+      import = PdfImport.create_from_statement!(statement: statement.reload)
+      import.update!(document_type: document_type, account: nil)
+      import
+    end
 
     def create_pdf_statement(account: accounts(:depository))
       AccountStatement.create_from_upload!(

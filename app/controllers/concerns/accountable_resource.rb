@@ -17,10 +17,11 @@ module AccountableResource
   end
 
   def new
+    prefill = statement_prefill
     @account = Current.family.accounts.build(
-      currency: Current.family.currency,
-      accountable: accountable_type.new
+      { currency: Current.family.currency, accountable: accountable_type.new }.merge(prefill.except(:opening_balance_date))
     )
+    @opening_balance_date = prefill[:opening_balance_date]
   end
 
   def show
@@ -185,6 +186,19 @@ module AccountableResource
       # The choice held back the automatic fetch; with it gone, that fetch
       # replaces or drops an automatic icon left from an earlier domain.
       AccountLogoFetchJob.perform_paced(@account)
+    end
+
+    # Starting values when the account is created from a PDF import's review
+    # screen. They are read from the import here rather than passed in the
+    # URL, so balances stay out of links and logs. The user still sees and
+    # submits the form.
+    def statement_prefill
+      return {} if params[:pdf_import_id].blank?
+
+      import = Current.family.imports.where(type: "PdfImport").find_by(id: params[:pdf_import_id])
+      return {} unless import && import.statement_account_type == accountable_type.name
+
+      import.new_account_attributes.compact_blank
     end
 
     # The account the 422 form renders when the exception carried none.

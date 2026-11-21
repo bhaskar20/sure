@@ -8,7 +8,8 @@ class PdfImport::AiProcessor
   def process
     require_ai_for_extraction!
     provider = route_provider
-    raise Provider::Error, I18n.t("imports.pdf_import.errors.provider_no_pdf_support") unless provider.supports_pdf_processing?
+    # Vision or, for a model without it (a local one), the PDF's extracted text.
+    raise Provider::Error, I18n.t("imports.pdf_import.errors.provider_no_pdf_support") unless provider.can_process_pdf?
 
     response = provider.process_pdf(
       pdf_content: pdf_import.pdf_file_content,
@@ -32,12 +33,43 @@ class PdfImport::AiProcessor
   def extract_transactions
     return unless pdf_import.statement_with_transactions?
 
+    # BankStatementExtractor returns symbol keys, but every reader here (and in
+    # generate_rows_from_extracted_data) digs with strings. jsonb keeps the hash
+    # exactly as assigned until the record is reloaded, so without this the
+    # in-memory read comes back empty and the import produces no rows at all.
+    data = (extract_transactions_with_rules || extract_transactions_with_model).deep_stringify_keys
+    pdf_import.update!(extracted_data: data)
+    data
+  end
+
+  # A statement whose rows reconcile against its own balances, or a dated
+  # transaction history, is read exactly by rules; only the rest needs a model.
+  def extract_transactions_with_rules
+    pages = Pdf::TextExtractor.pages(pdf_import.pdf_file_content)
+    result = Pdf::StatementParser.parse(pages, liability: pdf_import.credit_card_statement?) ||
+      Pdf::TransactionHistoryParser.parse(pages)
+    return unless result
+
+    Rails.logger.info("PdfImport #{pdf_import.id}: rule-based parser read #{result.transactions.size} rows")
+    {
+      transactions: result.transactions,
+      period: result.period,
+      opening_balance: result.opening_balance&.to_f,
+      closing_balance: result.closing_balance&.to_f
+    }
+  rescue StandardError => e
+    Rails.logger.warn("PdfImport #{pdf_import.id}: statement parser failed (#{e.class}), using the model")
+    nil
+  end
+
+  def extract_transactions_with_model
     require_ai_for_extraction!
     provider = route_provider
 
     response = provider.extract_bank_statement(
       pdf_content: pdf_import.pdf_file_content,
-      family: pdf_import.family
+      family: pdf_import.family,
+      liability: pdf_import.credit_card_statement?
     )
 
     unless response.success?
@@ -45,13 +77,7 @@ class PdfImport::AiProcessor
       raise Provider::Error, error_message
     end
 
-    # BankStatementExtractor returns symbol keys, but every reader here (and in
-    # generate_rows_from_extracted_data) digs with strings. jsonb keeps the hash
-    # exactly as assigned until the record is reloaded, so without this the
-    # in-memory read comes back empty and the import produces no rows at all.
-    data = response.data.deep_stringify_keys
-    pdf_import.update!(extracted_data: data)
-    data
+    response.data
   end
 
   private

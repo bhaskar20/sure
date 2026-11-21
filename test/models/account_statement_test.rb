@@ -34,6 +34,37 @@ class AccountStatementTest < ActiveSupport::TestCase
     end
   end
 
+  test "filename last four digits skip a year glued to a month name" do
+    pattern = AccountStatement::MetadataDetector::LAST4_PATTERN
+
+    assert_nil "Credit Cards Consolidated Statement_Nov2026"[pattern, 1]
+    assert_equal "1234", "visa_card_1234_statement"[pattern, 1]
+    assert_equal "4321", "chase-ending-4321"[pattern, 1]
+  end
+
+  test "a year in a statement filename is not taken for card digits" do
+    detector = AccountStatement::MetadataDetector.new(AccountStatement.new, content: "")
+
+    %w[Account_Statement_April_2026 card_statement_2026-04 Credit_Card_Statement_2026_04 DBS_card_Apr_2026].each do |name|
+      assert_nil detector.send(:filename_last4, name), name
+    end
+    assert_equal "2026", detector.send(:filename_last4, "visa_ending_2026_statement")
+    assert_equal "1234", detector.send(:filename_last4, "visa_card_1234_statement")
+  end
+
+  test "an image-only PDF upload does not wait for OCR" do
+    PDF::Reader.any_instance.stubs(:pages).returns([ stub(text: "Page 1 of 1") ])
+    Pdf::Ocr.expects(:pages).never
+
+    statement = AccountStatement.create_from_upload!(
+      family: @family,
+      account: @account,
+      file: uploaded_file(filename: "scan.pdf", content_type: "application/pdf", content: file_fixture("imports/sample_bank_statement.pdf").binread)
+    )
+
+    assert statement.persisted?
+  end
+
   test "creates linked statement from upload without importing transactions" do
     assert_no_difference [ "Import.count", "Entry.count", "Transaction.count" ] do
       statement = AccountStatement.create_from_upload!(

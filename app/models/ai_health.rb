@@ -155,7 +155,8 @@ class AiHealth
       @pdf_processing_capable = safely(false) do
         @llm_provider&.supports_pdf_processing?(model: llm_model)
       end
-      @pdf_text_extraction_capable = @pdf_processing_capable && @effective_llm_protocol == :openai
+      @pdf_text_extraction_capable = @effective_llm_protocol == :openai &&
+        safely(false) { @llm_provider.supports_pdf_text_extraction?(model: llm_model) }
       @pdf_vision_processing_capable = @pdf_processing_capable
 
       @openai_endpoint = redact_endpoint(openai_uri_base.presence || OPENAI_DEFAULT_ENDPOINT)

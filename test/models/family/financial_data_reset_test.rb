@@ -113,6 +113,17 @@ class Family::FinancialDataResetTest < ActiveSupport::TestCase
     assert Category.exists?(@other_category.id)
   end
 
+  test "destructive reset removes statements that back a PDF import" do
+    account = @family.accounts.first
+    statement = create_account_statement!(family: @family, account: account, label: "Statement Import")
+    pdf_import = PdfImport.create_from_statement!(statement: statement)
+
+    Family::FinancialDataReset.new(user: @user, dry_run: false, confirmed: true).call
+
+    assert_not AccountStatement.exists?(statement.id)
+    assert_not Import.exists?(pdf_import.id)
+  end
+
   test "destructive reset revokes provider item and clears provider account attachments" do
     account = @other_family.accounts.create!(
       name: "Provider Reset Checking",

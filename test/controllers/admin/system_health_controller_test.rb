@@ -387,9 +387,9 @@ class Admin::SystemHealthControllerTest < ActionDispatch::IntegrationTest
     assert_no_match(/local-token/, response.body)
   end
 
-  test "AI status does not probe PDF processing when it is explicitly disabled" do
+  test "AI status still probes PDF text extraction when PDF vision is disabled" do
     sign_in users(:sure_support_staff)
-    AiHealth::Probe.any_instance.expects(:pdf_text_extraction).never
+    AiHealth::Probe.any_instance.expects(:pdf_text_extraction).once.returns(probe_result(:passing))
     AiHealth::Probe.any_instance.expects(:pdf_vision_processing).never
 
     with_ai_environment(

@@ -109,3 +109,17 @@ fn rails_env_points_every_writable_path_at_the_data_folder() {
     #[cfg(windows)]
     assert!(env["PATH"].contains(&rt.libvips().display().to_string()));
 }
+
+#[test]
+fn rails_env_offers_ocr_only_when_the_runtime_has_the_helper() {
+    let data = temp_data("ocr");
+    let secrets = load_or_create_secrets(&data).unwrap();
+    let rt = Runtime { root: data.root.join("runtime") };
+    let env: std::collections::HashMap<_, _> = rails_env(&rt, &data, &secrets).into_iter().collect();
+    assert!(!env.contains_key("PDF_OCR_COMMAND"));
+
+    std::fs::create_dir_all(rt.ocr().parent().unwrap()).unwrap();
+    std::fs::write(rt.ocr(), b"").unwrap();
+    let env: std::collections::HashMap<_, _> = rails_env(&rt, &data, &secrets).into_iter().collect();
+    assert_eq!(env["PDF_OCR_COMMAND"], rt.ocr().display().to_string());
+}

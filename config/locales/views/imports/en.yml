@@ -636,6 +636,12 @@ en:
       select_account_hint: Choose which account to import these transactions into.
       no_accounts: No accounts available. Please create an account first.
       create_account: Create Account
+      create_account_from_statement: Create account from this statement
+      suggested_account: Suggested from the statement. Save to confirm.
+      suggested_account_with_last4: Suggested from the statement (ending %{last4}). Save to confirm.
+      new_account_kind:
+        credit_card: Credit card
+        depository: Account
       save_account: Save
       publish_transactions:
         one: "Publish %{count} Transaction"

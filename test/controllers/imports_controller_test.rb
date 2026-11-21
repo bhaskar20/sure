@@ -776,6 +776,21 @@ class ImportsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "PDF import review preselects the suggested account and offers to create one" do
+    pdf_import = imports(:pdf_with_rows)
+    pdf_import.update!(account: nil, document_type: "credit_card_statement")
+    PdfImport.any_instance.stubs(:pdf_uploaded?).returns(true)
+    card = accounts(:credit_card)
+    PdfImport.any_instance.stubs(:account_suggestion).returns(PdfImport::AccountSuggestion.new(account: card, last4: "4321"))
+
+    get import_url(pdf_import)
+
+    assert_response :success
+    assert_select 'select[name="import[account_id]"] option[selected][value=?]', card.id
+    assert_select "p", text: /ending 4321/
+    assert_select "a[href=?]", new_credit_card_path(return_to: import_path(pdf_import), pdf_import_id: pdf_import.id)
+  end
+
   test "PDF import account select does not leak unshared family accounts (#1803)" do
     sign_in users(:family_member)
     pdf_import = imports(:pdf_with_rows)

@@ -375,7 +375,15 @@ class Provider::Openai < Provider
     VISION_CAPABLE_MODEL_PREFIXES.any? { |prefix| model.start_with?(prefix) }
   end
 
+  # Text-only PDF reading: pdf-reader pulls the text out and any chat model
+  # summarizes it, so this works for endpoints without vision, such as Sure
+  # Desktop's local model. Scanned (image-only) PDFs still need vision.
+  def supports_pdf_text_extraction?(model: @default_model)
+    true
+  end
+
   # Analyze PDF bytes with the selected model and attribute usage to the family.
+  # Uses text extraction only when the model cannot take PDFs or images.
   # @param pdf_content [String] PDF bytes
   # @param model [String] optional override of the configured model
   # @param family [Family, nil] usage attribution
@@ -383,7 +391,7 @@ class Provider::Openai < Provider
   def process_pdf(pdf_content:, model: "", family: nil, json_mode: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
-      raise Error, "Model does not support PDF/vision processing: #{effective_model}" unless supports_pdf_processing?(model: effective_model)
+      processing_mode = supports_pdf_processing?(model: effective_model) ? :auto : :text
 
       trace = create_langfuse_trace(
         name: "openai.process_pdf",
@@ -406,6 +414,7 @@ class Provider::Openai < Provider
         langfuse_trace: trace,
         family: family,
         max_response_tokens: response_limit,
+        processing_mode: processing_mode,
         json_mode: json_mode
       ).process
 
@@ -418,7 +427,7 @@ class Provider::Openai < Provider
     end
   end
 
-  def extract_bank_statement(pdf_content:, model: "", family: nil, json_mode: nil)
+  def extract_bank_statement(pdf_content:, model: "", family: nil, json_mode: nil, liability: nil)
     with_provider_response do
       effective_model = model.presence || @default_model
 
@@ -431,7 +440,8 @@ class Provider::Openai < Provider
         client: client,
         pdf_content: pdf_content,
         model: effective_model,
-        json_mode: json_mode
+        json_mode: json_mode,
+        liability: liability
       ).extract
 
       finish_langfuse_trace(trace: trace, output: { transaction_count: result[:transactions].size })

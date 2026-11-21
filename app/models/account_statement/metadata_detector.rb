@@ -21,7 +21,9 @@ class AccountStatement::MetadataDetector
     (?![a-z0-9])
   /ix.freeze
 
-  LAST4_PATTERN = /(?:^|[^a-z0-9])(?:x{2,}|ending|last\s*4|acct|account|card)[^\d]*(\d{4})(?=\D|$)/i.freeze
+  # Four digits glued to a month name ("Statement_Nov2026") are a date, not an
+  # account number.
+  LAST4_PATTERN = /(?:^|[^a-z0-9])(?:x{2,}|ending|last\s*4|acct|account|card)[^\d]*(?<!jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(\d{4})(?=\D|$)/i.freeze
   GENERIC_FILENAME_HINTS = [
     "statement",
     "statements",
@@ -87,7 +89,7 @@ class AccountStatement::MetadataDetector
 
       detected = false
 
-      if (last4 = basename.match(LAST4_PATTERN)&.captures&.first)
+      if (last4 = filename_last4(basename))
         statement.account_last4_hint ||= last4
         detected = true
       end
@@ -131,9 +133,22 @@ class AccountStatement::MetadataDetector
       detected
     end
 
+    # "Card_Statement_2026-04" carries a year, not card digits: a year-like
+    # number counts only when marked as one ("xx2026", "ending 2026").
+    def filename_last4(basename)
+      match = basename.match(LAST4_PATTERN) or return nil
+      last4 = match[1]
+      return nil if last4.match?(/\A(?:19|20)\d{2}\z/) && !match[0].match?(/x{2,}|ending|last\s*4/i)
+
+      last4
+    end
+
     def detect_from_pdf(output)
-      summary = AccountStatement::TextMetadataParser.parse(pdf_text, currency: statement.currency)
-      return false unless summary
+      text = pdf_text
+      last4 = AccountStatement::TextMetadataParser.account_last4(text)
+      statement.account_last4_hint ||= last4
+      summary = AccountStatement::TextMetadataParser.parse(text, currency: statement.currency)
+      return last4.present? unless summary
 
       statement.period_start_on ||= summary.period_start_on
       statement.period_end_on ||= summary.period_end_on
@@ -160,7 +175,9 @@ class AccountStatement::MetadataDetector
     # top of a statement. Any reader failure leaves filename detection as the
     # fallback instead of failing the upload.
     def pdf_text
-      Pdf::TextExtractor.pages(content, max_pages: MAX_PDF_METADATA_PAGES).join("\n")
+      # Runs while the upload request waits, so no OCR: an image-only PDF
+      # keeps its filename metadata, and the import reads it with OCR later.
+      Pdf::TextExtractor.pages(content, max_pages: MAX_PDF_METADATA_PAGES, ocr: false).join("\n")
     rescue StandardError => e
       Rails.logger.info("AccountStatement::MetadataDetector - PDF text unavailable: #{e.class}")
       ""
