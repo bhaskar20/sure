@@ -223,6 +223,10 @@ class PdfImport < Import
     ai_processor.extract_transactions&.tap { sync_statement_metadata_from_extracted_data(_1) }
   end
 
+  def credit_card_statement?
+    document_type == "credit_card_statement" || account&.classification == "liability"
+  end
+
   def bank_statement?
     document_type == "bank_statement"
   end

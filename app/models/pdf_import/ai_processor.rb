@@ -33,6 +33,35 @@ class PdfImport::AiProcessor
   def extract_transactions
     return unless pdf_import.statement_with_transactions?
 
+    # BankStatementExtractor returns symbol keys, but every reader here (and in
+    # generate_rows_from_extracted_data) digs with strings. jsonb keeps the hash
+    # exactly as assigned until the record is reloaded, so without this the
+    # in-memory read comes back empty and the import produces no rows at all.
+    data = (extract_transactions_with_rules || extract_transactions_with_model).deep_stringify_keys
+    pdf_import.update!(extracted_data: data)
+    data
+  end
+
+  # A statement whose rows reconcile against its own balances is read exactly
+  # by rules; only the rest needs a model.
+  def extract_transactions_with_rules
+    pages = Pdf::TextExtractor.pages(pdf_import.pdf_file_content)
+    result = Pdf::StatementParser.parse(pages, liability: pdf_import.credit_card_statement?)
+    return unless result
+
+    Rails.logger.info("PdfImport #{pdf_import.id}: rule-based parser read #{result.transactions.size} rows")
+    {
+      transactions: result.transactions,
+      period: result.period,
+      opening_balance: result.opening_balance&.to_f,
+      closing_balance: result.closing_balance&.to_f
+    }
+  rescue StandardError => e
+    Rails.logger.warn("PdfImport #{pdf_import.id}: statement parser failed (#{e.class}), using the model")
+    nil
+  end
+
+  def extract_transactions_with_model
     require_ai_for_extraction!
     provider = route_provider
 
@@ -47,13 +76,7 @@ class PdfImport::AiProcessor
       raise Provider::Error, error_message
     end
 
-    # BankStatementExtractor returns symbol keys, but every reader here (and in
-    # generate_rows_from_extracted_data) digs with strings. jsonb keeps the hash
-    # exactly as assigned until the record is reloaded, so without this the
-    # in-memory read comes back empty and the import produces no rows at all.
-    data = response.data.deep_stringify_keys
-    pdf_import.update!(extracted_data: data)
-    data
+    response.data
   end
 
   private

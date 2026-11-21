@@ -131,6 +131,44 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_equal I18n.t("imports.pdf_import.errors.provider_no_pdf_support"), error.message
   end
 
+  test "extract_transactions reads a reconciling text statement without the LLM" do
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "credit_card_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
+      STATEMENT DATE 15 Nov 2026
+                PREVIOUS BALANCE                      40.00
+      07 NOV    BILL PAYMENT                          40.00 CR
+      08 NOV    COFFEE PLACE                           5.50
+      09 NOV    BOOK SHOP                             12.00
+      GRAND TOTAL FOR ALL CARD ACCOUNTS:              17.50
+    TEXT
+    Provider::Registry.expects(:preferred_llm_provider).never
+
+    data = import.extract_transactions
+
+    assert_equal [ 40.0, -5.5, -12.0 ], data["transactions"].map { |t| t["amount"] }
+    assert_equal 17.5, data["closing_balance"]
+    assert_equal 3, import.reload.extracted_transactions.size
+  end
+
+  test "extract_transactions falls back to the LLM when the text does not reconcile" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    import.update!(document_type: "bank_statement")
+    Pdf::TextExtractor.stubs(:pages).returns([ "Page 1 of 1" ])
+    provider = mock
+    provider.expects(:extract_bank_statement).returns(Provider::Response.new(
+      success?: true,
+      data: { transactions: [ { date: "2026-11-02", amount: -9.0, name: "Lunch" } ] },
+      error: nil
+    ))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+
+    data = import.extract_transactions
+
+    assert_equal [ "Lunch" ], data["transactions"].map { |t| t["name"] }
+  end
+
   test "process_with_ai_later enqueues ProcessPdfJob" do
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
 
