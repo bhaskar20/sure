@@ -223,6 +223,99 @@ class PdfImport < Import
     ai_processor.extract_transactions&.tap { sync_statement_metadata_from_extracted_data(_1) }
   end
 
+  # The account type a statement of this document type belongs to.
+  STATEMENT_ACCOUNT_TYPES = { "bank_statement" => "Depository", "credit_card_statement" => "CreditCard" }.freeze
+
+  AccountSuggestion = Data.define(:account, :last4)
+
+  # Four digits written as an account number: "••1234", "•••• 1234",
+  # "**** 1234", "XXXX-1234", "x1234", "...1234", "ending 1234", "#1234".
+  MARKED_ACCOUNT_DIGITS = /(?:[•*]+|\.{2,}|\bx+|\bending\s+(?:in\s+)?|#)[\s-]?(\d{4})(?!\d)/i
+  GENERIC_INSTITUTION_WORDS = %w[bank banking the of and card cards credit account accounts savings group limited ltd inc plc co corp financial].freeze
+
+  # Statements often print a symbol where an ISO code is expected ("S$").
+  CURRENCY_SYMBOL_CODES = {
+    "S$" => "SGD", "A$" => "AUD", "AU$" => "AUD", "C$" => "CAD", "CA$" => "CAD", "NZ$" => "NZD",
+    "HK$" => "HKD", "US$" => "USD", "R$" => "BRL", "€" => "EUR", "£" => "GBP", "₹" => "INR", "RM" => "MYR"
+  }.freeze
+
+  def self.iso_currency(value)
+    raw = value.to_s.strip.upcase
+    return nil if raw.blank?
+
+    Money::Currency.new(CURRENCY_SYMBOL_CODES.fetch(raw, raw)).iso_code
+  rescue Money::Currency::UnknownCurrencyError
+    nil
+  end
+
+  def statement_account_type
+    STATEMENT_ACCOUNT_TYPES[document_type]
+  end
+
+  # The account this statement most likely belongs to, among `accounts` (the
+  # ones the reviewer can reach), for the review screen to preselect. Only
+  # accounts of the statement's type are considered, and nothing is linked
+  # until the reviewer saves it.
+  def account_suggestion(accounts)
+    return nil if account.present? || statement_account_type.nil?
+
+    candidates = accounts.where(accountable_type: statement_account_type)
+    conflicting = candidates.visible.select { |candidate| contradicts_statement?(candidate) }.map(&:id)
+    candidates = candidates.where.not(id: conflicting) if conflicting.any?
+    found = matched_account(candidates) || account_created_for_this_import(candidates)
+    found && AccountSuggestion.new(account: found, last4: statement_last4)
+  end
+
+  # Starting values for an account created from this statement. Its balance is
+  # the statement's opening balance on the day before the period starts, so
+  # once the rows are published the account ends on the closing balance.
+  # Without both, balance and date are left for the user to fill in.
+  def new_account_attributes
+    start_on = parse_statement_date(extracted_data&.dig("period", "start_date")) || account_statement&.period_start_on
+    opening = statement_opening_balance
+    known_start = opening.present? && start_on.present?
+
+    {
+      name: new_account_name,
+      institution_name: statement_institution,
+      currency: statement_currency_code,
+      balance: (opening if known_start),
+      opening_balance_date: (start_on - 1.day if known_start)
+    }
+  end
+
+  # The opening balance as a number. A model can return it as printed
+  # ("1,050.00 DR"); anything but a plain number is left for the user.
+  def statement_opening_balance
+    value = extracted_data&.dig("opening_balance").presence || account_statement&.opening_balance
+    case value
+    when Numeric then value.to_d
+    when String then value.strip.match?(/\A-?[\d,]*\.?\d+\z/) ? value.delete(",").to_d : nil
+    end
+  end
+
+  def statement_institution
+    account_statement&.sanitized_parser_output&.dig("extracted_institution").presence
+  end
+
+  # The statement row defaults to the family currency at upload; the one
+  # read from the document is the account's own.
+  def statement_currency_code
+    self.class.iso_currency(account_statement&.sanitized_parser_output&.dig("extracted_currency")) ||
+      account_statement&.statement_currency.presence || family.currency
+  end
+
+  # "DBS Bank Credit card ••1234": what the statement is, and the digits that
+  # let next month's statement find this account again.
+  def new_account_name
+    kind = I18n.t("imports.pdf_import.new_account_kind.#{statement_account_type.to_s.underscore}", default: "")
+    [ statement_institution, kind.presence, statement_last4 && "••#{statement_last4}" ].compact.join(" ").presence
+  end
+
+  def statement_last4
+    account_statement&.account_last4_hint.presence
+  end
+
   def credit_card_statement?
     document_type == "credit_card_statement" || account&.classification == "liability"
   end
@@ -556,6 +649,70 @@ class PdfImport < Import
       errors.add(:account_statement, :invalid)
     end
 
+    def matched_account(candidates)
+      return nil unless account_statement
+
+      institutions = [ statement_institution, account_statement.institution_name_hint ].compact_blank.uniq
+      (institutions.presence || [ nil ]).each do |institution|
+        match = AccountStatement::AccountMatcher.best_match(
+          family: family,
+          accounts: candidates,
+          institution_hint: institution,
+          account_name_hint: account_statement.account_name_hint,
+          account_last4_hint: statement_last4,
+          currency: account_statement.statement_currency
+        )
+        return match.account if match
+      end
+
+      # The last four digits alone are below the matcher's threshold, but
+      # among accounts of the statement's own type one showing them as its
+      # number ("Visa ••1234"), at the statement's bank, is the account.
+      return nil unless statement_last4
+
+      by_last4 = candidates.visible.select do |candidate|
+        "#{candidate.name} #{candidate.institution_name}".scan(MARKED_ACCOUNT_DIGITS).flatten.include?(statement_last4) &&
+          same_institution?(candidate)
+      end
+      by_last4.one? ? by_last4.first : nil
+    end
+
+    # An account that shows a different number ("Altitude ••9999" for a
+    # statement ending 1234) is not this statement's, however well the rest of
+    # it matches. Only a number written as one counts: a year in a name
+    # ("Visa 2024") says nothing.
+    def contradicts_statement?(candidate)
+      return false unless statement_last4
+
+      numbers = "#{candidate.name} #{candidate.institution_name}".scan(MARKED_ACCOUNT_DIGITS).flatten
+      numbers.any? && numbers.exclude?(statement_last4)
+    end
+
+    # Creating an account from this screen returns here, so the one account
+    # of this type made since the upload is the statement's, provided it is
+    # in the statement's currency and, when the statement names its bank,
+    # names it too.
+    def account_created_for_this_import(candidates)
+      recent = candidates.visible.where(created_at: created_at..).to_a
+      return nil unless recent.one?
+
+      account = recent.first
+      account.currency == statement_currency_code && same_institution?(account) ? account : nil
+    end
+
+    # Whether an account can be at the statement's bank: its name or
+    # institution carries the bank's own word ("dbs" in "DBS Bank Ltd", "us" in
+    # "U.S. Bank"), not just a shared place name. True when the statement
+    # names no bank.
+    def same_institution?(account)
+      brand = institution_words(statement_institution).first
+      brand.nil? || institution_words("#{account.name} #{account.institution_name}").include?(brand)
+    end
+
+    def institution_words(text)
+      text.to_s.downcase.delete(".").scan(/[[:alnum:]]+/) - GENERIC_INSTITUTION_WORDS
+    end
+
     def sync_statement_metadata_from_extracted_data(data)
       return unless statement_backed?
 
@@ -603,6 +760,7 @@ class PdfImport < Import
 
     def apply_statement_metadata_updates(start_date:, end_date:, opening_balance:, closing_balance:, institution_name:, account_last4:, currency: nil)
       updates = {}
+      currency = self.class.iso_currency(currency) || currency
 
       if currency.present?
         if account_statement.currency.blank? && account_statement.account_id.blank?
@@ -642,6 +800,15 @@ class PdfImport < Import
 
       bounded_institution = institution_name.presence&.to_s&.strip&.first(200)&.presence
       updates[:institution_name_hint] = bounded_institution if bounded_institution && account_statement.institution_name_hint.blank?
+      # The hint above is often a guess from the filename; the name read from
+      # the document is kept apart so account suggestions can prefer it.
+      if bounded_institution
+        parser_output = (updates[:sanitized_parser_output] || account_statement.sanitized_parser_output || {}).dup
+        if parser_output["extracted_institution"] != bounded_institution
+          parser_output["extracted_institution"] = bounded_institution
+          updates[:sanitized_parser_output] = parser_output
+        end
+      end
       updates[:account_last4_hint] = account_last4 if account_last4.present? && account_statement.account_last4_hint.blank?
 
       parsed_start = parse_statement_date(start_date)

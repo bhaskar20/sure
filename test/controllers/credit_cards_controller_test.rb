@@ -8,6 +8,30 @@ class CreditCardsControllerTest < ActionDispatch::IntegrationTest
     @account = accounts(:credit_card)
   end
 
+  test "prefills a new card from a PDF import's statement" do
+    import = PdfImport.create!(family: @user.family, document_type: "credit_card_statement", status: :pending,
+      extracted_data: { "period" => { "start_date" => "2026-10-16" }, "opening_balance" => 387.24, "transactions" => [] })
+
+    get new_credit_card_path(pdf_import_id: import.id, return_to: import_path(import))
+
+    assert_response :success
+    assert_select "input[name='account[name]'][value=?]", "Credit card"
+    assert_select "input[name='account[opening_balance_date]'][value=?]", "2026-10-15"
+    assert_select "input[name='account[balance]'][value=?]", "387.24"
+  end
+
+  test "ignores a PDF import from another family or of another account type" do
+    other = PdfImport.create!(family: families(:empty), document_type: "credit_card_statement", status: :pending)
+    bank = PdfImport.create!(family: @user.family, document_type: "bank_statement", status: :pending)
+
+    [ other, bank ].each do |import|
+      get new_credit_card_path(pdf_import_id: import.id)
+
+      assert_response :success
+      assert_select "input[name='account[name]'][value]", count: 0
+    end
+  end
+
   test "creates with credit card details" do
     assert_difference -> { Account.count } => 1,
       -> { CreditCard.count } => 1,

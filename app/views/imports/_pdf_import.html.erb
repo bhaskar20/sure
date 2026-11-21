@@ -50,28 +50,41 @@
 
         <div class="space-y-2">
           <h2 id="pdf-import-select-account" class="font-medium text-primary"><%= t("imports.pdf_import.select_account") %></h2>
+          <%# Provider-backed accounts are offered too: rows are matched against
+              existing transactions before they are ever shown, so importing a
+              statement for a synced account can no longer duplicate what sync
+              already brought in. %>
+          <% accounts = Current.user.accessible_accounts.alphabetically.pluck(:name, :id) %>
+          <% suggestion = import.account_suggestion(Current.user.accessible_accounts) %>
           <%= styled_form_with model: import, scope: :import, url: import_path(import), method: :patch, class: "space-y-2" do |f| %>
-            <%# Provider-backed accounts are offered too: rows are matched against
-                existing transactions before they are ever shown, so importing a
-                statement for a synced account can no longer duplicate what sync
-                already brought in. %>
-            <% accounts = Current.user.accessible_accounts.alphabetically.pluck(:name, :id) %>
             <% if accounts.any? %>
               <%= f.select :account_id, accounts,
-                           { include_blank: t("imports.pdf_import.select_account_placeholder"), selected: import.account_id, label: false },
+                           { include_blank: t("imports.pdf_import.select_account_placeholder"), selected: import.account_id || suggestion&.account&.id, label: false },
                            { "aria-labelledby": "pdf-import-select-account" } %>
-              <% if import.account.nil? %>
+              <% if suggestion %>
+                <p class="text-xs text-secondary">
+                  <%= suggestion.last4 ? t("imports.pdf_import.suggested_account_with_last4", last4: suggestion.last4) : t("imports.pdf_import.suggested_account") %>
+                </p>
+              <% elsif import.account.nil? %>
                 <p class="text-xs text-secondary"><%= t("imports.pdf_import.select_account_hint") %></p>
               <% end %>
             <% else %>
               <p class="text-sm text-secondary px-3 py-2 bg-warning/10 rounded-lg">
                 <%= t("imports.pdf_import.no_accounts") %>
               </p>
-              <%= render DS::Link.new(text: t("imports.pdf_import.create_account"), href: new_account_path(return_to: import_path(import)), variant: "primary", full_width: true, frame: :modal) %>
             <% end %>
             <% if accounts.any? %>
               <%= f.submit t("imports.pdf_import.save_account") %>
             <% end %>
+          <% end %>
+          <% if import.account.nil? %>
+            <%= render DS::Link.new(
+                  text: import.statement_account_type ? t("imports.pdf_import.create_account_from_statement") : t("imports.pdf_import.create_account"),
+                  href: new_account_from_import_path(import),
+                  variant: accounts.any? ? "secondary" : "primary",
+                  full_width: true,
+                  frame: :modal
+                ) %>
           <% end %>
         </div>
       </div>

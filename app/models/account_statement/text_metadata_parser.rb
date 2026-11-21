@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Reads the period, IBAN and opening/closing balances from the text of a bank
-# statement, without knowing which bank wrote it.
+# statement, without knowing which bank wrote it. account_last4 also reads a
+# labelled account or card number, for statements without an IBAN.
 #
 # - Period: the first date range in the text, e.g. "01 apr 2026 - 30 apr 2026",
 #   "01.04.2026 – 30.04.2026", "2026-04-01 to 2026-04-30",
@@ -92,6 +93,23 @@ class AccountStatement::TextMetadataParser
   # The rest of the line after "IBAN": one unspaced token, or the printed
   # groups of four ("DE89 3704 0044 0532 0130 00").
   IBAN_PATTERN = /IBAN[:\s]*([A-Z]{2}\d{2}[A-Z0-9 ]*)/
+  # A line that starts with a date is a transaction, not the statement header.
+  TRANSACTION_LINE = %r{\A\s*(?:\d{1,2}[/.\-]\d{1,2}(?:[/.\-]\d{2,4})?|\d{4}-\d{2}-\d{2}|\d{1,2}\s+[a-z]{3,9}\.?(?:\s|$))}i
+  # A labelled account or card number: "Account No. 123-456789-0",
+  # "CARD NO.: 4111 1111 1111 1234", "Card number ending 1234". Groups may be
+  # masked ("XXXX XXXX XXXX 1234"); the last group must be digits. A number
+  # needs six digits, or a mask or "ending", so a stray small number is not
+  # taken for one.
+  # Only a clearly delimited number counts: one token (hyphens allowed), or
+  # a card's 4-4-4-4 or 4-6-5 groups, followed by the end of the line, a wider
+  # gap or a word. Where a space separates it from more digits ("1234 5678 90",
+  # "XXXX 1234 5000", "123-456789-0 01/10/2026") there is no telling where it
+  # ends, and no number is better than a wrong one.
+  ACCOUNT_NUMBER_PATTERN = %r{
+    \b(?:account|acct|card|a/c)\.?\s*(?:no|number|num|\#)\.?(?<ending>\s*ending(?:\s+in)?)?[\s.:]*
+    (?<number>(?:[\dXx*•]{4}[ ]){3}\d{4}|[\dXx*•]{4}[ ][\dXx*•]{6}[ ]\d{5}|(?:[\dXx*•]+-)*[\dXx*•]*\d)
+    (?=[ \t]*$|[ \t]{2,}|[ \t]+[^\d\s]|[.,;)]?(?:\s|$)(?!\d)|[^\d\s\-/,.;)])
+  }ix
   TOLERANCE = BigDecimal("0.01")
 
   Amount = Data.define(:value, :currency)
@@ -100,6 +118,15 @@ class AccountStatement::TextMetadataParser
   # such as "$" when the statement is in a dollar currency.
   def self.parse(text, currency: nil)
     new(text, currency: currency).parse
+  end
+
+  # The last four digits of the account the statement is for: its labelled
+  # account or card number, otherwise its IBAN. Transaction lines are left
+  # out, since they name the other party's account ("Transfer to IBAN ...").
+  def self.account_last4(text)
+    own = text.to_s.lines.grep_v(TRANSACTION_LINE).join
+    parser = new(own)
+    parser.send(:parse_account_number_last4) || parser.send(:parse_iban_last4)
   end
 
   def initialize(text, currency: nil)
@@ -286,6 +313,17 @@ class AccountStatement::TextMetadataParser
       @currency_hint if @currency_hint && Money::Currency.new(@currency_hint).symbol == "$"
     rescue Money::Currency::UnknownCurrencyError
       nil
+    end
+
+    def parse_account_number_last4
+      match = ACCOUNT_NUMBER_PATTERN.match(@text) or return nil
+      number = match[:number]
+
+      digits = number.delete("^0-9")
+      masked = match[:ending].present? || number.match?(/[Xx*•]/)
+      return nil if digits.length < 4 || (digits.length < 6 && !masked)
+
+      digits[-4..]
     end
 
     def parse_iban_last4

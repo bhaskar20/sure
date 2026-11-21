@@ -1,4 +1,16 @@
 module ImportsHelper
+  # The new-account form for the kind of account a PDF statement belongs to,
+  # prefilled from the import and returning to it once the account is made.
+  def new_account_from_import_path(import)
+    return_to = import_path(import)
+
+    case import.statement_account_type
+    when "CreditCard" then new_credit_card_path(return_to: return_to, pdf_import_id: import.id)
+    when "Depository" then new_depository_path(return_to: return_to, pdf_import_id: import.id)
+    else new_account_path(return_to: return_to)
+    end
+  end
+
   def mapping_label(mapping_class)
     {
       "Import::AccountTypeMapping" => I18n.t("imports.mapping_labels.account_type"),

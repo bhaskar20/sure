@@ -28,7 +28,9 @@ class AccountStatement::AccountMatcher
     #
     # `exclude_account_ids` lets a caller resolving several accounts out of one
     # document avoid handing the same account to two different entries.
-    def best_match(family:, institution_hint: nil, account_name_hint: nil, account_last4_hint: nil, currency: nil, exclude_account_ids: [])
+    # `accounts` narrows the candidates (to one account type, or to the
+    # accounts a user can reach); it defaults to the family's accounts.
+    def best_match(family:, institution_hint: nil, account_name_hint: nil, account_last4_hint: nil, currency: nil, exclude_account_ids: [], accounts: nil)
       return nil if family.blank?
 
       institution_hint = normalize_hint(institution_hint)
@@ -39,7 +41,8 @@ class AccountStatement::AccountMatcher
 
       excluded = Array.wrap(exclude_account_ids).compact
 
-      candidates = family.accounts.visible.to_a.filter_map do |account|
+      scope = accounts ? accounts.where(family_id: family.id) : family.accounts
+      candidates = scope.visible.to_a.filter_map do |account|
         next if excluded.include?(account.id)
 
         confidence = confidence_for(
