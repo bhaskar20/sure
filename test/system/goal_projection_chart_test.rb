@@ -18,13 +18,15 @@ class GoalProjectionChartTest < ApplicationSystemTestCase
       preferences: (@user.preferences || {}).merge("preview_features_enabled" => true),
       show_ai_sidebar: false
     )
-    travel_to(TODAY) { sign_in @user }
     # TODAY is in the past. A request the browser sends outside travel_to (a
     # frame still loading after sign-in) runs at the real clock, where a
     # session last touched on TODAY is idle beyond
-    # Session::INACTIVITY_TIMEOUT and is ended. Stamped at the real clock, it
-    # is fresh on both dates.
-    @user.sessions.update_all(updated_at: Time.current)
+    # Session::INACTIVITY_TIMEOUT and is ended. Stamped ahead of both clocks
+    # before the block ends, it is fresh on either date.
+    travel_to(TODAY) do
+      sign_in @user
+      @user.sessions.update_all(updated_at: 10.years.from_now)
+    end
   end
 
   test "a target on a gridline keeps its full label inside the chart" do
