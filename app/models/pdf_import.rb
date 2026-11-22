@@ -137,6 +137,8 @@ class PdfImport < Import
           category: counterparty ? nil : mappings.categories.mappable_for(row.category),
           kind: counterparty&.dig(:kind) || "standard",
           entry: Entry.new(
+            # Set here so a refund can name a purchase from the same statement.
+            id: SecureRandom.uuid,
             account: account,
             date: row.date_iso,
             amount: row.signed_amount,
@@ -156,6 +158,7 @@ class PdfImport < Import
         transaction
       end
 
+      PdfImport::CardCredits.new(account: account, transactions: new_transactions).apply! if account.credit_card?
       Transaction.import!(new_transactions, recursive: true) if new_transactions.any?
       reconcile_entries!(reconciled_now, at: reconciled_at)
       link_counterparts!(to_link)
@@ -231,6 +234,11 @@ class PdfImport < Import
       total: total,
       classified: total - counts[nil]
     }
+  end
+
+  def revert
+    @settled_purchase_ids = settled_purchase_ids
+    super
   end
 
   # Re-targeting is destructive: it releases the statement's evidence on the
@@ -804,6 +812,7 @@ class PdfImport < Import
     # regenerating re-judges every statement line against what the account
     # actually holds now, so the review screen offers exactly what is missing.
     def revert_derived_state!
+      restore_settled_purchases!
       release_reconciliations!(account_id)
       return unless has_extracted_transactions?
 
@@ -811,6 +820,22 @@ class PdfImport < Import
       # A line that matched at publish time carried no row and so no mapping.
       # If it no longer matches it is a row again, and needs one.
       sync_mappings
+    end
+
+    # A refund this import published may have settled a purchase recorded
+    # before it, excluding that purchase from reports. Its own entries are gone
+    # by now, so the purchases were noted when the revert began.
+    def restore_settled_purchases!
+      return if @settled_purchase_ids.blank?
+
+      Entry.where(id: @settled_purchase_ids, excluded: true).update_all(excluded: false, updated_at: Time.current)
+    end
+
+    def settled_purchase_ids
+      key = PdfImport::CardCredits::EXTRA_KEY
+      Transaction.where(id: entries.where(entryable_type: "Transaction").select(:entryable_id))
+        .where("transactions.extra -> ? ->> 'settled' = 'true'", key)
+        .pluck(Arel.sql(ActiveRecord::Base.sanitize_sql_array([ "transactions.extra -> ? ->> 'entry_id'", key ])))
     end
 
     # A statement whose every line still matches something -- a provider-synced

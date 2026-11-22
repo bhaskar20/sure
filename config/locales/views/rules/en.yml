@@ -12,6 +12,8 @@ en:
       turn_off_suggestions: "Turn off rule suggestions"
       message: Updated to %{category_name}
     classifier_rules:
+      ai_categorization: AI categorization
+      ai_merchant_detection: AI merchant detection
       category_classifier: Category classifier
       merchant_matcher: Merchant matcher
     filters:
@@ -164,6 +166,7 @@ en:
       title: Recent Runs
       description: View the execution history of your rules including success/failure status and transaction counts.
       unnamed_rule: Unnamed Rule
+      view_failure_log: View failure log
       columns:
         date_time: Date/Time
         execution_type: Type

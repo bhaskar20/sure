@@ -1,4 +1,9 @@
 class RuleRun < ApplicationRecord
+  # Enough to find the transactions in the failure log without letting one
+  # failed batch bloat the row.
+  FAILURE_LOG_TRANSACTION_LIMIT = 50
+  FAILURE_LOG_ENTRY_LIMIT = 20
+
   belongs_to :rule
 
   validates :execution_type, inclusion: { in: %w[manual scheduled immediate] }
@@ -71,15 +76,14 @@ class RuleRun < ApplicationRecord
   def fail_job!(error:, source:, transaction_ids: [])
     should_log = false
     drained = false
-    current_error_message = "#{error.class}: #{error.message}"
 
     with_lock do
       should_log = !failed?
       drained = pending_jobs_count == 1
       self.pending_jobs_count = [ pending_jobs_count - 1, 0 ].max
       self.status = "failed"
-      existing_error_messages = error_message.to_s.split("\n").reject(&:blank?)
-      self.error_message = (existing_error_messages + [ current_error_message ]).uniq.join("\n")
+      append_error_message(error)
+      append_failure_log(error:, source:, transaction_ids:)
 
       save!
     end
@@ -90,7 +94,62 @@ class RuleRun < ApplicationRecord
     offer_job_results if drained
   end
 
+  # Records a failure the runner caught outside the async jobs.
+  def record_failure!(error:, source:, transaction_ids: [])
+    with_lock do
+      self.status = "failed"
+      append_error_message(error)
+      append_failure_log(error:, source:, transaction_ids:)
+      save!
+    end
+  end
+
+  FailureEntry = Data.define(:message, :error_class, :source, :transaction_count, :transaction_ids, :occurred_at) do
+    def self.from_log(attrs)
+      new(
+        message: attrs["message"].to_s,
+        error_class: attrs["error_class"],
+        source: attrs["source"],
+        transaction_count: attrs["transaction_count"].to_i,
+        transaction_ids: Array(attrs["transaction_ids"]),
+        occurred_at: (Time.zone.parse(attrs["occurred_at"]) if attrs["occurred_at"].present?)
+      )
+    end
+  end
+
+  # Newest first. Runs recorded before the failure log existed only kept
+  # error_message, so those show its lines alone.
+  def failure_entries
+    if failure_log.present?
+      failure_log.map { |attrs| FailureEntry.from_log(attrs) }.reverse
+    else
+      error_message.to_s.split("\n").reject(&:blank?).map { |message| FailureEntry.from_log("message" => message) }
+    end
+  end
+
+  def failure_transaction_ids
+    failure_entries.flat_map(&:transaction_ids).uniq
+  end
+
   private
+    def append_error_message(error)
+      existing_error_messages = error_message.to_s.split("\n").reject(&:blank?)
+      self.error_message = (existing_error_messages + [ "#{error.class}: #{error.message}" ]).uniq.join("\n")
+    end
+
+    def append_failure_log(error:, source:, transaction_ids:)
+      ids = Array(transaction_ids).compact
+      entry = {
+        "occurred_at" => Time.current.iso8601,
+        "source" => source,
+        "error_class" => error.class.name,
+        "message" => error.message,
+        "transaction_count" => ids.size,
+        "transaction_ids" => ids.first(FAILURE_LOG_TRANSACTION_LIMIT)
+      }
+      self.failure_log = (Array(failure_log) + [ entry ]).last(FAILURE_LOG_ENTRY_LIMIT)
+    end
+
     # The jobs of an immediate run with AI actions offer what they changed once
     # the last one is done; ApplyImmediateRulesJob offers the run's other changes.
     def offer_job_results

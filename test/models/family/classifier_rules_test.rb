@@ -2,6 +2,7 @@ require "test_helper"
 
 class Family::ClassifierRulesTest < ActiveSupport::TestCase
   include EntriesTestHelper
+  include ActiveJob::TestHelper
 
   setup do
     @family = Family.create!(name: "Classifier rules family")
@@ -11,12 +12,42 @@ class Family::ClassifierRulesTest < ActiveSupport::TestCase
     @tag = @family.tags.create!(name: "Review")
   end
 
-  test "a new family gets the matcher and Bayes at the top of its rules, on" do
+  test "a new family gets the matcher and Bayes at the top of its rules, on, and the AI rules below them, off" do
     rules = @family.rules.ordered.includes(:actions)
 
-    assert_equal [ [ "Merchant matcher", 1, true, "fill_similar_merchants" ], [ "Category classifier", 2, true, "bayes_categorize" ] ],
-                 rules.map { |rule| [ rule.name, rule.position, rule.active?, rule.actions.sole.action_type ] }
+    assert_equal [
+      [ "Merchant matcher", 1, true, "fill_similar_merchants" ],
+      [ "Category classifier", 2, true, "bayes_categorize" ],
+      [ "AI merchant detection", 3, false, "auto_detect_merchants" ],
+      [ "AI categorization", 4, false, "auto_categorize" ]
+    ], rules.map { |rule| [ rule.name, rule.position, rule.active?, rule.actions.sole.action_type ] }
     assert rules.all? { |rule| rule.conditions.none? }
+  end
+
+  test "an AI rule's switch is whether its rule is on" do
+    assert_not @family.classifier_rule_active?("auto_categorize")
+
+    @family.set_classifier_rule_active!("auto_categorize", true)
+
+    assert @family.classifier_rule_active?("auto_categorize")
+    assert_not @family.classifier_rule_active?("auto_detect_merchants")
+  end
+
+  test "an AI rule that's off sends nothing to the AI" do
+    uncategorized("Starbucks Coffee")
+
+    assert_no_enqueued_jobs(only: [ AutoCategorizeJob, AutoDetectMerchantsJob ]) do
+      ApplyRulesJob.perform_now(@family)
+    end
+  end
+
+  test "an AI rule that's on queues the AI after the free steps" do
+    uncategorized("Starbucks Coffee")
+    @family.set_classifier_rule_active!("auto_categorize", true)
+
+    assert_enqueued_jobs 1, only: AutoCategorizeJob do
+      ApplyRulesJob.perform_now(@family)
+    end
   end
 
   test "an added rule goes in at the top, the others moving down" do
@@ -30,9 +61,10 @@ class Family::ClassifierRulesTest < ActiveSupport::TestCase
     @family.add_classifier_rule!("bayes_categorize")
 
     # A deleted rule leaves a gap in the numbers, as any does; the order holds.
-    assert_equal [ "Category classifier", "Merchant matcher", "Mine" ], @family.rules.ordered.map(&:name)
+    assert_equal [ "Category classifier", "Merchant matcher", "AI merchant detection", "AI categorization", "Mine" ],
+                 @family.rules.ordered.map(&:name)
     assert_equal [ 1, 2 ], @family.rules.ordered.first(2).map(&:position)
-    assert_operator mine.reload.position, :>, 2
+    assert_operator mine.reload.position, :>, 4
   end
 
   test "an added rule moves rule groups down with the rules" do
@@ -45,10 +77,11 @@ class Family::ClassifierRulesTest < ActiveSupport::TestCase
     @family.add_classifier_rule!("bayes_categorize")
 
     items = Rule::Layout.new(@family).items
-    assert_equal [ "Category classifier", "Merchant matcher", "Loose", "group:Groceries" ],
+    assert_equal [ "Category classifier", "Merchant matcher", "AI merchant detection", "AI categorization", "Loose", "group:Groceries" ],
                  items.map { |item| item.group? ? "group:#{item.group.name}" : item.rule.name }
     assert_equal [ grouped ], items.last.rules
-    assert_equal [ "Category classifier", "Merchant matcher", "Loose", "Grouped" ], @family.rules.ordered.map(&:name)
+    assert_equal [ "Category classifier", "Merchant matcher", "AI merchant detection", "AI categorization", "Loose", "Grouped" ],
+                 @family.rules.ordered.map(&:name)
   end
 
   test "the switch is whether the rule is on" do

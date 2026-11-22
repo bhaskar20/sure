@@ -740,6 +740,8 @@ Rails.application.routes.draw do
     end
   end
 
+  resources :rule_runs, only: :show
+
   resources :rules, except: :show do
     member do
       get :confirm

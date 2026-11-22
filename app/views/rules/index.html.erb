@@ -169,10 +169,13 @@
                   <% else %>
                     <%= render DS::Pill.new(label: t("rules.recent_runs.statuses.#{run.status}"), tone: :error, marker: false) %>
                   <% end %>
-                  <% if run.failed? && run.error_message.present? %>
-                    <div data-controller="tooltip" data-tooltip-content-value="<%= run.error_message %>">
+                  <% if run.failed? %>
+                    <%= link_to rule_run_path(run),
+                                data: { turbo_frame: "modal", controller: "tooltip", tooltip_content_value: t("rules.recent_runs.view_failure_log") },
+                                class: "inline-flex focus-ring rounded-sm",
+                                aria: { label: t("rules.recent_runs.view_failure_log") } do %>
                       <%= icon("info", size: "sm", color: "destructive") %>
-                    </div>
+                    <% end %>
                   <% end %>
                 </div>
               </td>
