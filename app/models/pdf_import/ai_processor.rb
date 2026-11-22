@@ -22,6 +22,7 @@ class PdfImport::AiProcessor
     end
 
     result = response.data
+    result = result.with(document_type: checked_document_type(result.document_type)) if result.respond_to?(:with)
     pdf_import.update!(
       ai_summary: result.summary,
       document_type: result.document_type
@@ -82,6 +83,25 @@ class PdfImport::AiProcessor
 
   private
     attr_reader :pdf_import
+
+    STATEMENT_TYPES = %w[bank_statement credit_card_statement].freeze
+
+    # The model calls a statement a statement reliably, but mixes up a card's and
+    # a bank account's often enough that the document's own wording decides
+    # between the two. Its text layer is enough; OCR is left to extraction.
+    def checked_document_type(document_type)
+      return document_type unless document_type.in?(STATEMENT_TYPES)
+
+      text = Pdf::TextExtractor.pages(pdf_import.pdf_file_content, max_pages: 3, ocr: false).join("\n")
+      detected = Pdf::StatementKind.detect(text)
+      if detected && detected != document_type
+        Rails.logger.info("PdfImport #{pdf_import.id}: statement wording reads as #{detected}, not #{document_type}")
+      end
+      detected || document_type
+    rescue StandardError => e
+      Rails.logger.warn("PdfImport #{pdf_import.id}: could not check statement type (#{e.class})")
+      document_type
+    end
 
     # Asks the router whether a statement can be read, before the job calls a model. The
     # message is the router's reason, worded for the family member who uploaded it.

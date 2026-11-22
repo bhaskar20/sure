@@ -119,6 +119,22 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_equal "bank_statement", import.document_type
   end
 
+  test "process_with_ai corrects a card statement the model called a bank statement" do
+    Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
+    import = PdfImport.create_from_statement!(statement: create_pdf_statement)
+    result = Provider::LlmConcept::PdfProcessingResult.new(summary: "Monthly statement", document_type: "bank_statement", extracted_data: {})
+    provider = mock
+    provider.stubs(:can_process_pdf?).returns(true)
+    provider.expects(:process_pdf).returns(Provider::Response.new(success?: true, data: result, error: nil))
+    Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
+    Pdf::TextExtractor.stubs(:pages).returns([ "Credit Limit 5,000.00  Minimum Amount Due 120.00  Payment Due Date 15 Dec" ])
+
+    returned = import.process_with_ai
+
+    assert_equal "credit_card_statement", import.reload.document_type
+    assert_equal "credit_card_statement", returned.document_type, "the job routes on the returned type"
+  end
+
   test "process_with_ai refuses a provider that cannot read PDFs at all" do
     Ai.stubs(:availability).returns(Ai::Availability.available(:extract_pdf))
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
