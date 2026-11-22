@@ -142,7 +142,7 @@ class Rule::Runner
         rule_run.update!(**run_counts(result, queued: matched_ids.size, rule: rule))
         @changed_now_count += changed_now(result)
       rescue => e
-        rule_run = record_failure(rule, rule_run, e, executed_at: executed_at, queued: matched_ids.size)
+        rule_run = record_failure(rule, rule_run, e, executed_at: executed_at, queued: matched_ids.size, matched_ids: matched_ids)
       ensure
         # Claims hold even when the rule failed halfway, so a rule further down
         # never overwrites what this rule may already have set.
@@ -174,10 +174,13 @@ class Rule::Runner
       end
     end
 
-    def record_failure(rule, rule_run, error, executed_at:, queued:)
+    def record_failure(rule, rule_run, error, executed_at:, queued:, matched_ids:)
       errors << error
       error_message = "#{error.class}: #{error.message}"
       Rails.logger.error("Rule::Runner failed for rule #{rule.id}: #{error_message}")
+
+      rule_run = store_failure(rule, rule_run, error, executed_at:, queued:, matched_ids:)
+
       # A failed rule, such as a pattern that timed out, is the user's to fix, so
       # support sees it in the debug log as RuleRun#fail_job! records its own.
       DebugLogEntry.capture(
@@ -187,32 +190,34 @@ class Rule::Runner
         source: self.class.name,
         family: rule.family,
         metadata: {
+          rule_run_id: rule_run&.id,
           rule_id: rule.id,
           rule_name: rule.name,
           execution_type: execution_type,
           error_class: error.class.name,
           error_message: error.message,
+          transaction_count: matched_ids.size,
           backtrace: Array(error.backtrace).first(10)
         }
       )
 
-      if rule_run
-        rule_run.update(status: "failed", error_message: error_message)
-        rule_run
-      else
-        RuleRun.create!(
-          rule: rule,
-          rule_name: rule.name,
-          execution_type: execution_type,
-          status: "failed",
-          transactions_queued: queued,
-          transactions_processed: 0,
-          transactions_modified: 0,
-          pending_jobs_count: 0,
-          executed_at: executed_at,
-          error_message: error_message
-        )
-      end
+      rule_run
+    end
+
+    def store_failure(rule, rule_run, error, executed_at:, queued:, matched_ids:)
+      rule_run ||= RuleRun.create!(
+        rule: rule,
+        rule_name: rule.name,
+        execution_type: execution_type,
+        status: "failed",
+        transactions_queued: queued,
+        transactions_processed: 0,
+        transactions_modified: 0,
+        pending_jobs_count: 0,
+        executed_at: executed_at
+      )
+      rule_run.record_failure!(error: error, source: self.class.name, transaction_ids: matched_ids)
+      rule_run
     rescue => e
       Rails.logger.error("Rule::Runner: Failed to record RuleRun for rule #{rule.id}: #{e.message}")
       rule_run

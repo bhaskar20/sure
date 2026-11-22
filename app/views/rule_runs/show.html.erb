@@ -1,0 +1,55 @@
+<%= render DS::Dialog.new do |dialog| %>
+  <% dialog.with_header(
+       title: t(".title"),
+       subtitle: t(".subtitle",
+                   rule: @rule_run.rule_name.presence || @rule_run.rule&.name.presence || t("rules.recent_runs.unnamed_rule"),
+                   time: @rule_run.executed_at.strftime("%b %d, %Y %I:%M %p"))
+     ) %>
+
+  <% dialog.with_body do %>
+    <div class="space-y-4">
+      <% if @rule_run.failure_entries.empty? %>
+        <p class="text-sm text-secondary"><%= t(".no_errors") %></p>
+      <% else %>
+        <ul class="space-y-3">
+          <% @rule_run.failure_entries.each do |entry| %>
+            <li class="rounded-lg border border-primary p-3 space-y-1">
+              <p class="text-sm text-primary break-words"><%= entry.message %></p>
+              <p class="text-xs text-secondary">
+                <%= [
+                      entry.error_class,
+                      entry.source,
+                      (t(".transaction_count", count: entry.transaction_count) if entry.transaction_count.positive?),
+                      entry.occurred_at&.strftime("%b %d, %Y %I:%M:%S %p")
+                    ].compact.join(" · ") %>
+              </p>
+            </li>
+          <% end %>
+        </ul>
+      <% end %>
+
+      <% if @failed_transactions.any? %>
+        <div class="space-y-2">
+          <h3 class="text-sm font-medium text-primary"><%= t(".transactions_title") %></h3>
+          <ul class="divide-y divide-primary rounded-lg border border-primary">
+            <% @failed_transactions.each do |transaction| %>
+              <li class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span class="text-primary truncate"><%= transaction.entry.name %></span>
+                <span class="text-secondary whitespace-nowrap tabular-nums">
+                  <%= l(transaction.entry.date, format: :short) %> · <%= format_money(transaction.entry.amount_money) %>
+                </span>
+              </li>
+            <% end %>
+          </ul>
+          <% if @failed_transaction_count > @failed_transactions.size %>
+            <p class="text-xs text-secondary">
+              <%= t(".more_transactions", count: @failed_transaction_count - @failed_transactions.size) %>
+            </p>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% dialog.with_action(cancel_action: true, text: t(".close"), variant: :outline) %>
+<% end %>

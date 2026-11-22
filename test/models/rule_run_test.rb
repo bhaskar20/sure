@@ -166,6 +166,54 @@ class RuleRunTest < ActiveSupport::TestCase
     rule_run.complete_job!(modified_count: 1)
   end
 
+  test "fail_job keeps a failure log entry per failed job" do
+    rule_run = create_rule_run(pending_jobs_count: 2)
+    first_ids = [ SecureRandom.uuid, SecureRandom.uuid ]
+    second_ids = [ SecureRandom.uuid ]
+
+    rule_run.fail_job!(error: RuntimeError.new("timeout"), source: "AutoCategorizeJob", transaction_ids: first_ids)
+    rule_run.fail_job!(error: ArgumentError.new("bad response"), source: "AutoDetectMerchantsJob", transaction_ids: second_ids)
+
+    entries = rule_run.reload.failure_entries
+    assert_equal [ "bad response", "timeout" ], entries.map(&:message)
+    assert_equal [ "ArgumentError", "RuntimeError" ], entries.map(&:error_class)
+    assert_equal [ "AutoDetectMerchantsJob", "AutoCategorizeJob" ], entries.map(&:source)
+    assert_equal [ 1, 2 ], entries.map(&:transaction_count)
+    assert entries.all?(&:occurred_at)
+    assert_equal (first_ids + second_ids).sort, rule_run.failure_transaction_ids.sort
+  end
+
+  test "failure log caps the transaction ids it keeps" do
+    rule_run = create_rule_run
+    ids = Array.new(RuleRun::FAILURE_LOG_TRANSACTION_LIMIT + 5) { SecureRandom.uuid }
+
+    rule_run.fail_job!(error: RuntimeError.new("boom"), source: "AutoCategorizeJob", transaction_ids: ids)
+
+    entry = rule_run.reload.failure_entries.sole
+    assert_equal ids.size, entry.transaction_count
+    assert_equal RuleRun::FAILURE_LOG_TRANSACTION_LIMIT, entry.transaction_ids.size
+  end
+
+  test "record_failure keeps errors already recorded by jobs" do
+    rule_run = create_rule_run(pending_jobs_count: 2)
+    rule_run.fail_job!(error: RuntimeError.new("job failed"), source: "AutoCategorizeJob")
+
+    rule_run.record_failure!(error: StandardError.new("runner failed"), source: "Rule::Runner")
+
+    rule_run.reload
+    assert_equal "failed", rule_run.status
+    assert_equal "RuntimeError: job failed\nStandardError: runner failed", rule_run.error_message
+    assert_equal [ "runner failed", "job failed" ], rule_run.failure_entries.map(&:message)
+  end
+
+  test "failure entries fall back to error_message for runs without a failure log" do
+    rule_run = create_rule_run(status: "failed")
+    rule_run.update!(error_message: "RuntimeError: one\nRuntimeError: two")
+
+    assert_equal [ "RuntimeError: one", "RuntimeError: two" ], rule_run.failure_entries.map(&:message)
+    assert_empty rule_run.failure_transaction_ids
+  end
+
   private
     def create_rule_run(status: "pending", pending_jobs_count: 1)
       @rule.rule_runs.create!(

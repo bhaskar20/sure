@@ -1,0 +1,15 @@
+---
+en:
+  rule_runs:
+    show:
+      title: Failure log
+      subtitle: "%{rule} · %{time}"
+      no_errors: This run did not record any errors.
+      transaction_count:
+        one: 1 transaction
+        other: "%{count} transactions"
+      transactions_title: Transactions in the failed batches
+      more_transactions:
+        one: and 1 more transaction
+        other: "and %{count} more transactions"
+      close: Close
