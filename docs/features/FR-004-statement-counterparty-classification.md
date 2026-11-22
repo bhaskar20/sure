@@ -2,11 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress |
+| Status | In review |
 | Priority | P1 |
 | Owner | claude-fr-004 |
 | Branch | feature/FR-004-statement-counterparty-classification |
-| PR | — |
+| PR | [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
 | Depends on | — |
 
 ## Problem
