@@ -27,6 +27,9 @@
 <%= settings_section title: t(".matcher"), subtitle: t(".matcher_description") do %>
   <%= render "settings/classifiers/matcher", settings: @settings, active: @rules_active["fill_similar_merchants"] %>
 <% end %>
+<%= settings_section title: t(".ai"), subtitle: t(".ai_description") do %>
+  <%= render "settings/classifiers/ai", rules_active: @rules_active %>
+<% end %>
 <%= settings_section title: t(".auto_tune") do %>
   <%= render "settings/classifiers/evaluation", evaluation: @evaluation, settings: @settings, running: @evaluation_running, weight: @weight %>
 <% end %>

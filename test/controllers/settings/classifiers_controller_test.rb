@@ -18,8 +18,8 @@ class Settings::ClassifiersControllerTest < ActionDispatch::IntegrationTest
     assert_select "input[name='bayes_settings[threshold]'][value='0.7']"
     assert_select "input[name='included_category_ids[]']", count: @family.categories.count
     assert_select "#classifier_evaluation"
-    # The fixture family has no classifier rules, so both switches are off.
-    assert_select "input[type=checkbox][role=switch][name='active']:not([checked])", count: 2
+    # The fixture family has no built-in rules, so all four switches are off.
+    assert_select "input[type=checkbox][role=switch][name='active']:not([checked])", count: 4
     assert_select ".translation_missing", count: 0
     assert_select "span", text: I18n.t("settings.classifiers.category_training.exclude_transfers_hint")
   end
@@ -103,12 +103,53 @@ class Settings::ClassifiersControllerTest < ActionDispatch::IntegrationTest
     assert_select "dialog", text: /#{Regexp.escape(title)}/, count: 0
   end
 
-  test "a rule's switch only knows the matcher and Bayes" do
+  test "a rule's switch only knows the built-in rules" do
+    sign_in @admin
+
+    patch rule_settings_classifier_path, params: { action_type: "set_transaction_category", active: "1" }
+
+    assert_response :bad_request
+  end
+
+  test "the AI rules' switches turn their rules on and off" do
+    @family.add_classifier_rule!("auto_categorize", active: false)
+    @family.add_classifier_rule!("auto_detect_merchants", active: false)
     sign_in @admin
 
     patch rule_settings_classifier_path, params: { action_type: "auto_categorize", active: "1" }
 
-    assert_response :bad_request
+    assert_redirected_to settings_classifier_path
+    assert @family.classifier_rule_active?("auto_categorize")
+    assert_not @family.classifier_rule_active?("auto_detect_merchants")
+
+    patch rule_settings_classifier_path, params: { action_type: "auto_categorize", active: "0" }
+    assert_not @family.classifier_rule_active?("auto_categorize")
+  end
+
+  test "turning on a deleted AI rule offers to add it again" do
+    sign_in @admin
+    name = I18n.t("rules.classifier_rules.ai_categorization")
+
+    patch rule_settings_classifier_path, params: { action_type: "auto_categorize", active: "1" }
+    assert_redirected_to settings_classifier_path(add_rule: "auto_categorize")
+
+    assert_difference -> { @family.classifier_rules("auto_categorize").count }, 1 do
+      post add_rule_settings_classifier_path, params: { action_type: "auto_categorize" }
+    end
+    assert_equal name, @family.classifier_rules("auto_categorize").sole.name
+  end
+
+  test "each AI switch says where its transactions would go" do
+    sign_in @admin
+
+    use_ai_routes(categorize: %w[gpu/qwen3-8b], detect_merchants: %w[openai/gpt-4.1-mini])
+    get settings_classifier_path
+    assert_select "p", text: I18n.t("settings.classifiers.ai.provider_local", model: "qwen3-8b")
+    assert_select "p", text: /gpt-4\.1-mini/
+
+    use_no_ai
+    get settings_classifier_path
+    assert_select "p", text: I18n.t("settings.classifiers.ai.provider_none"), count: 2
   end
 
   test "run and clear locks queue their jobs" do

@@ -1,0 +1,13 @@
+<%# locals: (rules_active:) %>
+<%# The AI rules' switches (AI categorization, AI merchant detection), on and
+    off with those rules in Rules, and where each would send its
+    transactions. %>
+<div class="space-y-4">
+  <% Family::AI_CLASSIFIER_ACTION_TYPES.reverse_each do |action_type| %>
+    <div class="space-y-1">
+      <%= render "settings/classifiers/rule_toggle", action_type: action_type, active: rules_active[action_type],
+            label: t("settings.classifiers.ai.#{action_type}"), hint: t("settings.classifiers.ai.#{action_type}_hint") %>
+      <p class="text-xs text-secondary"><%= ai_classifier_provider_hint(action_type) %></p>
+    </div>
+  <% end %>
+</div>
