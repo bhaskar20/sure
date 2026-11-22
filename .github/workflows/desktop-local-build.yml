@@ -105,16 +105,28 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Signs the in-app update (Sure.app.tar.gz) for the public key in
+          # tauri.conf.json. Without it the build still makes the DMG, and
+          # installed apps offer that DMG in the browser instead.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         # Unset secrets arrive as empty strings, which Tauri would treat as
         # "sign/notarize with this"; drop them so unsigned builds work.
         run: |
           for v in APPLE_SIGNING_IDENTITY APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             [ -n "${!v}" ] || unset "$v"
           done
+          updater=()
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            updater=(--config '{"bundle":{"createUpdaterArtifacts":true}}')
+          else
+            unset TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            echo "::warning::TAURI_SIGNING_PRIVATE_KEY is not set; no in-app update is built"
+          fi
           # DMG packaging (hdiutil) intermittently hangs and fails on hosted
           # runners; the app build is cached, so a retry costs only packaging.
           for attempt in 1 2 3; do
-            npx tauri build --verbose --config src-tauri/tauri.local.conf.json --target ${{ matrix.rust_target }} && exit 0
+            npx tauri build --verbose --config src-tauri/tauri.local.conf.json "${updater[@]}" --target ${{ matrix.rust_target }} && exit 0
             echo "::warning::DMG build attempt $attempt failed"
             hdiutil info | grep -E '^/dev/' | awk '{print $1}' | xargs -n1 hdiutil detach -force 2>/dev/null || true
           done
@@ -125,6 +137,15 @@ jobs:
           name: sure-desktop-macos-${{ matrix.arch }}
           path: desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/dmg/*.dmg
           if-no-files-found: error
+
+      # The signed in-app update, when the signing key is set.
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: sure-desktop-update-macos-${{ matrix.arch }}
+          path: |
+            desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/target/${{ matrix.rust_target }}/release/bundle/macos/*.app.tar.gz.sig
+          if-no-files-found: ignore
 
   windows:
     name: Windows x64

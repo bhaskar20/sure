@@ -171,15 +171,42 @@ built too but installed apps don't offer them. If the build fails, fix it and
 run **Desktop Publish** by hand from the Actions tab with the release's tag.
 Tags not starting with `desktop-v` are ignored by this workflow.
 
+With the repository secret `TAURI_SIGNING_PRIVATE_KEY` set, the release also
+gets a signed in-app update per Mac (`Sure-macOS-<arch>.app.tar.gz`) and
+`latest.json`, the manifest installed apps update from. The key signs updates
+for the public key in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`);
+apps only install updates signed by it. Keep a backup of the private key: an
+update signed with any other key is refused, so losing it means users must
+reinstall from a DMG once a new key ships. To make a new pair:
+```bash
+npx tauri signer generate --ci -p "" -w ~/.tauri/sure-desktop-updater.key
+```
+then put the private key in the secret (`gh secret set TAURI_SIGNING_PRIVATE_KEY
+< ~/.tauri/sure-desktop-updater.key`) and the `.pub` contents in `pubkey`. A key
+with a password also needs `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Without the
+secret, releases have only the DMGs and apps offer those in the browser.
+
 ## Updating an installed app
 CI builds check this repository's `desktop-v*` releases 20 seconds after launch
-and every 6 hours. When a newer one with this Mac's DMG attached exists, Sure sends a notification and the
-app menu item **Check for Updates…** becomes **Download Sure <version>…**,
-which opens the DMG for this Mac in the browser. **Preferences → Updates**
-shows the result and checks on demand. Nothing is installed automatically:
-quit Sure, open the DMG, drag Sure into Applications and choose **Replace**.
-Your data lives in `~/Library/Application Support/app.sure.desktop/`, outside
-the app, so it is kept; new database migrations run on the next launch.
+and every 6 hours. When a newer one with this Mac's DMG attached exists, Sure
+sends a notification and **Preferences → Updates** shows it; it also checks on
+demand.
+
+- If the release has `latest.json`, the menu item **Check for Updates…**
+  becomes **Install Sure <version>…** and Preferences offers **Install Sure
+  <version> and Restart**. Sure downloads the update, checks its signature,
+  replaces the app where it is installed (macOS asks for an administrator
+  password if Sure can't write there) and restarts into the new version. The
+  download never goes through a browser, so it isn't quarantined and
+  Gatekeeper doesn't block the new version.
+- Otherwise the menu item becomes **Download Sure <version>…**, which opens
+  this Mac's DMG in the browser: quit Sure, open the DMG, drag Sure into
+  Applications and choose **Replace**. That copy needs the Gatekeeper steps
+  below again.
+
+Nothing installs without the user choosing it. Your data lives in
+`~/Library/Application Support/app.sure.desktop/`, outside the app, so it is
+kept; new database migrations run on the next launch.
 
 Builds without `SURE_UPDATE_REPO` set at compile time (local `npm run
 build:mac`, `tauri dev`) don't check; debug builds only check on demand.
@@ -202,6 +229,9 @@ it once in Terminal:
 ```bash
 xattr -cr /Applications/Sure.app
 ```
+If Sure's Dock icon keeps bouncing with no window even after **Open Anyway**,
+macOS has stuck on that copy: delete it from Applications and copy Sure from
+the DMG again. Updates installed from inside Sure don't need any of this.
 Signing + notarization (below) removes this friction entirely.
 
 ## Tests

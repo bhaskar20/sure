@@ -3,8 +3,11 @@ name: Desktop Publish
 # Publishing a GitHub Release tagged desktop-v<major>.<minor>.<patch> (for
 # example desktop-v0.2.0) builds the Mac DMGs at that tag and attaches them to
 # the release. Installed apps check these releases and offer the DMG for their
-# Mac once it is attached. The tag is the app version, so each release must be
-# higher than the one before.
+# Mac once it is attached. When the build signed an in-app update (secret
+# TAURI_SIGNING_PRIVATE_KEY), the release also gets Sure-macOS-<arch>.app.tar.gz
+# and latest.json, and installed apps update themselves from those instead.
+# The tag is the app version, so each release must be higher than the one
+# before.
 #
 # To rebuild the DMGs of an existing release, run this workflow by hand with
 # its tag.
@@ -66,7 +69,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: sure-desktop-macos-*
+          pattern: sure-desktop-*macos-*
           path: artifacts
 
       # Stable names, so the app (and any website link) can find the DMG for
@@ -82,8 +85,41 @@ jobs:
           done
           ls -l release
 
+      # Tauri's static update manifest. Written only when every architecture
+      # has a signed update, so no Mac is pointed at an update it can't get.
+      - name: Write the update manifest
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          platforms='{}'
+          for pair in arm64:darwin-aarch64 x86_64:darwin-x86_64; do
+            arch="${pair%%:*}" target="${pair#*:}"
+            dir="artifacts/sure-desktop-update-macos-$arch"
+            tarball=("$dir"/*.app.tar.gz)
+            if [ ! -f "${tarball[0]}" ] || [ ! -f "${tarball[0]}.sig" ]; then
+              echo "::warning::no signed in-app update for $arch; installed apps will offer the DMG instead"
+              exit 0
+            fi
+            cp "${tarball[0]}" "release/Sure-macOS-$arch.app.tar.gz"
+            platforms="$(jq --arg t "$target" --arg url "$base/Sure-macOS-$arch.app.tar.gz" \
+              --arg sig "$(cat "${tarball[0]}.sig")" '. + {($t): {url: $url, signature: $sig}}' <<<"$platforms")"
+          done
+          jq -n --arg v "$VERSION" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson p "$platforms" \
+            '{version: $v, pub_date: $date, platforms: $p}' > release/latest.json
+          cat release/latest.json
+
+      # The manifest goes up last: it must never point at files not uploaded yet.
       - name: Upload to the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
-        run: gh release upload "$TAG" release/*.dmg --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gh release upload "$TAG" release/*.dmg release/*.app.tar.gz --clobber --repo "$GITHUB_REPOSITORY"
+          if [ -f release/latest.json ]; then
+            gh release upload "$TAG" release/latest.json --clobber --repo "$GITHUB_REPOSITORY"
+          fi

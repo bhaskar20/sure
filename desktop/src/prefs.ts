@@ -83,6 +83,9 @@ interface UpdateInfo {
   checked: boolean;
   available: boolean;
   latest: string | null;
+  installable: boolean;
+  installing: boolean;
+  progress: number | null;
   error: string | null;
 }
 
@@ -90,18 +93,29 @@ $("updates-title").textContent = U.title;
 $("update-check").textContent = U.check;
 
 function renderUpdate(info: UpdateInfo) {
+  lastUpdate = info;
   const status = $("update-status");
   const download = $("update-download");
   const check = $("update-check") as HTMLButtonElement;
   check.classList.toggle("hidden", !info.enabled);
-  check.disabled = info.checking;
-  download.classList.toggle("hidden", !(info.available && info.latest));
+  check.disabled = info.checking || info.installing;
+  download.classList.toggle("hidden", !(info.available && info.latest) || info.installing);
   status.dataset.kind = info.error && !info.checking ? "error" : "";
   if (!info.enabled) status.textContent = U.disabled(info.current);
   else if (info.checking) status.textContent = U.checking;
-  else if (info.available && info.latest) {
-    status.textContent = U.available(info.latest, info.current);
-    download.textContent = U.download(info.latest);
+  else if (info.installing && info.latest) {
+    const percent = info.progress === null ? null : Math.round(info.progress * 100);
+    status.textContent = U.installing(info.latest, percent);
+  } else if (info.available && info.latest) {
+    if (info.installable) {
+      status.textContent = info.error
+        ? U.installFailed(info.latest, info.error)
+        : U.installable(info.latest, info.current);
+      download.textContent = U.install(info.latest);
+    } else {
+      status.textContent = U.available(info.latest, info.current);
+      download.textContent = U.download(info.latest);
+    }
   } else if (info.error) status.textContent = U.failed(info.current);
   else if (info.checked) status.textContent = U.upToDate(info.current);
   else status.textContent = U.current(info.current);
@@ -110,8 +124,10 @@ function renderUpdate(info: UpdateInfo) {
 $("update-check").addEventListener("click", () => {
   invoke<UpdateInfo>("check_for_updates").then(renderUpdate).catch(() => {});
 });
+let lastUpdate: UpdateInfo | null = null;
 $("update-download").addEventListener("click", () => {
-  invoke("download_update").catch((err) => ($("update-status").textContent = String(err)));
+  const command = lastUpdate?.installable ? "install_update" : "download_update";
+  invoke(command).catch((err) => ($("update-status").textContent = String(err)));
 });
 listen<UpdateInfo>("updates://changed", (e) => renderUpdate(e.payload));
 invoke<UpdateInfo>("update_status").then(renderUpdate);

@@ -56,6 +56,9 @@
     }
   },
   "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZENTEwQzRDOEQzMjY4NTAKUldSUWFES05UQXhSYmM4ODBZd1NWWFBnelM1aWhQYVpmcWFnRjl1MjJoa3l4TloybUpoNG1IRGYK"
+    },
     "deep-link": {
       "desktop": {
         "schemes": [

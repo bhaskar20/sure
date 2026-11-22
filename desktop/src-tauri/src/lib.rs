@@ -25,6 +25,7 @@ pub fn run() {
             None,
         ))
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .manage(local_backend::LocalBackend::default())
         .manage(local_ai_app::AiHandle::default())
@@ -53,6 +54,7 @@ pub fn run() {
             updates::update_status,
             updates::check_for_updates,
             updates::download_update,
+            updates::install_update,
         ])
         .setup(|app| {
             servers::init(&app.config().identifier);
