@@ -2,11 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In review |
+| Status | In progress |
 | Priority | P1 |
 | Owner | claude-fr-004 |
-| Branch | feature/FR-004-statement-counterparty-classification |
-| PR | [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
+| Branch | Slice 1: feature/FR-004-statement-counterparty-classification; slice 2: feature/FR-004-slice-2-provisional-legs |
+| PR | Slice 1: [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
 | Depends on | — |
 
 ## Problem
@@ -323,11 +323,14 @@ adds by hand that we missed (recall proxy).
 - 2026-11-22 (slice 1): Identifier values are encrypted deterministically
   when encryption is configured, so the per-account uniqueness still holds.
   Only partial numbers (last four) and holder names are stored.
+- 2026-11-23 (slice 2, product owner): Provisional legs are never created on a
+  manual account with a balance the user set by hand. There the line stays
+  unlinked with a transfer kind, as in slice 1, and the link is only
+  suggested. Provider-linked accounts get no leg either; their sync delivers
+  the other side.
 
 ## Open questions
 
-- Should provisional legs be created on manual accounts that use balance
-  anchors (valuations), or only suggested there? (Product owner.)
 - Do spouses/partners in the same family count as "internal" for budgets, or
   should they be a fourth class ("household")? (Product owner.)
 - How long should the re-classifier look back by default — 13 months, or the
