@@ -78,15 +78,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir release
-          for arch in arm64 x86_64; do
-            dmg=(artifacts/sure-desktop-macos-$arch/*.dmg)
+          # Whichever architectures desktop-local-build.yml built; Apple
+          # Silicon is required.
+          [ -d artifacts/sure-desktop-macos-arm64 ] || { echo "::error::no arm64 DMG was built"; exit 1; }
+          for dir in artifacts/sure-desktop-macos-*/; do
+            arch="$(basename "$dir")"; arch="${arch#sure-desktop-macos-}"
+            dmg=("$dir"*.dmg)
             [ "${#dmg[@]}" -eq 1 ] && [ -f "${dmg[0]}" ] || { echo "::error::expected one DMG for $arch"; exit 1; }
             cp "${dmg[0]}" "release/Sure-macOS-$arch.dmg"
           done
           ls -l release
 
       # Tauri's static update manifest. Written only when every architecture
-      # has a signed update, so no Mac is pointed at an update it can't get.
+      # with a DMG has a signed update, so no Mac is pointed at an update it can't get.
       - name: Write the update manifest
         env:
           TAG: ${{ needs.version.outputs.tag }}
@@ -95,8 +99,13 @@ jobs:
           set -euo pipefail
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
           platforms='{}'
-          for pair in arm64:darwin-aarch64 x86_64:darwin-x86_64; do
-            arch="${pair%%:*}" target="${pair#*:}"
+          for dmg in release/Sure-macOS-*.dmg; do
+            arch="$(basename "$dmg" .dmg)"; arch="${arch#Sure-macOS-}"
+            case "$arch" in
+              arm64) target=darwin-aarch64 ;;
+              x86_64) target=darwin-x86_64 ;;
+              *) echo "::error::unknown architecture $arch"; exit 1 ;;
+            esac
             dir="artifacts/sure-desktop-update-macos-$arch"
             tarball=("$dir"/*.app.tar.gz)
             if [ ! -f "${tarball[0]}" ] || [ ! -f "${tarball[0]}.sig" ]; then
