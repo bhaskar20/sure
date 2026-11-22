@@ -42,7 +42,16 @@ class ImportsController < ApplicationController
     # step that needs a new choice.
     return redirect_to import_path(@import) if @import.failed? && !@import.publishable?
 
-    @import.publish_later
+    if @import.is_a?(PdfImport)
+      # Under the import's lock, so a row edit cannot slip in between
+      # preparing the lines and the status change that closes the review.
+      @import.with_lock do
+        @import.prepare_counterparty_for_publish!(Current.user) if @import.publishable?
+        @import.publish_later
+      end
+    else
+      @import.publish_later
+    end
 
     redirect_to import_path(@import), notice: t(".started")
   rescue Import::MaxRowCountExceededError

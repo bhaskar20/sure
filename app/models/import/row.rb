@@ -36,6 +36,42 @@ class Import::Row < ApplicationRecord
     import.sync_mappings
   end
 
+  COUNTERPARTY_CHOICES = %w[internal_untracked external unknown].freeze
+
+  # The reviewer's pick from the Counterparty column: "account:<id>" for one of
+  # the family's accounts, or a class without an account. The caller checks
+  # that the account is one the reviewer may link to.
+  def counterparty_choice
+    return if counterparty_class.blank?
+    return "account:#{counterparty_account_id}" if counterparty_class == "internal_tracked" && counterparty_account_id.present?
+
+    # Linked to an account deleted since; publishing treats it as a plain line.
+    counterparty_class == "internal_tracked" ? "unknown" : counterparty_class
+  end
+
+  def counterparty_choice=(choice)
+    choice = choice.to_s
+    if choice.start_with?("account:")
+      account_id = choice.delete_prefix("account:")
+      return if account_id.blank?
+
+      self.counterparty_entry_id = nil unless account_id == counterparty_account_id
+      self.counterparty_class = "internal_tracked"
+      self.counterparty_account_id = account_id
+    elsif choice.in?(COUNTERPARTY_CHOICES)
+      self.counterparty_class = choice
+      self.counterparty_account_id = nil
+      self.counterparty_entry_id = nil
+    else
+      return
+    end
+    self.counterparty_user_set = true
+  end
+
+  def counterparty_internal?
+    counterparty_class.in?(%w[internal_tracked internal_untracked])
+  end
+
   private
     # Supports historical comma-delimited exports and pipe-delimited templates.
     # Backslash escapes comma, pipe, and backslash so tag names can contain either delimiter.

@@ -1,7 +1,8 @@
 <%# locals: (row:) %>
 
-<div style="grid-template-columns: repeat(<%= row.import.column_keys.count %>, minmax(150px, 1fr));" class="first:rounded-tl-lg first:rounded-tr-lg last:rounded-bl-lg last:rounded-br-lg grid divide-x divide-alpha-black-200 theme-dark:divide-alpha-white-200 group">
-  <% row.import.column_keys.each_with_index do |key, idx| %>
+<% keys = review_column_keys(row.import) %>
+<div style="grid-template-columns: repeat(<%= keys.count %>, minmax(150px, 1fr));" class="first:rounded-tl-lg first:rounded-tr-lg last:rounded-bl-lg last:rounded-br-lg grid divide-x divide-alpha-black-200 theme-dark:divide-alpha-white-200 group">
+  <% keys.each_with_index do |key, idx| %>
     <%= turbo_frame_tag dom_id(row, key), title: row.valid? ? nil : row.errors.full_messages.join(", ") do %>
       <%= form_with(
             model: [row.import, row],
@@ -15,6 +16,22 @@
             }
           ) do |form| %>
         <div class="relative">
+          <% if key == :counterparty %>
+            <%= form.select :counterparty_choice,
+                  counterparty_select_options(row),
+                  {},
+                  "data-auto-submit-form-target": "auto",
+                  "data-autosubmit-trigger-event": "change",
+                  "aria-label": import_col_label(:counterparty),
+                  title: counterparty_reasons_text(row),
+                  id: dom_id(row, :counterparty_choice),
+                  class: [
+                    cell_class(row, key),
+                    "focus:outline-none focus:z-10 relative",
+                    idx == keys.count - 1 ? "group-first:rounded-tr-lg group-last:rounded-br-lg" : "",
+                  ],
+                  disabled: row.import.complete? %>
+          <% else %>
           <%= form.text_field key,
                 "data-auto-submit-form-target": "auto",
                 "data-action": "focus->mobile-cell-interaction#highlightCell blur->mobile-cell-interaction#unhighlightCell touchstart->mobile-cell-interaction#handleCellTouch",
@@ -22,10 +39,11 @@
                 class: [
                   cell_class(row, key),
                   idx == 0 ? "group-first:rounded-tl-lg group-last:rounded-bl-lg" : "",
-                  idx == row.import.column_keys.count - 1 ? "group-first:rounded-tr-lg group-last:rounded-br-lg" : "",
+                  idx == keys.count - 1 ? "group-first:rounded-tr-lg group-last:rounded-br-lg" : "",
                   "focus:outline-none focus:z-10 relative",
                 ],
                 disabled: row.import.complete? %>
+          <% end %>
 
           <% if !cell_is_valid?(row, key) %>
             <span class="absolute right-2 top-1/2 -translate-y-1/2 text-destructive md:hidden"

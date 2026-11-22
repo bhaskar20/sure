@@ -282,6 +282,47 @@ adds by hand that we missed (recall proxy).
 - 2026-11-22: Anything applied without the user reviewing it (re-classifier)
   stays a pending suggestion, matching how `auto_match_transfers!` treats its
   own guesses.
+- 2026-11-22 (slice 1): Only PDF statement imports are classified. CSV
+  imports can span several accounts per file and are left for later.
+- 2026-11-22 (slice 1): Classification itself needs no model, but a PDF
+  import still does: `ProcessPdfJob` asks a model to classify and summarize
+  the document before extraction.
+- 2026-11-22 (slice 1): Rows are classified while any household member has
+  opted into preview features, because the job has no current user. The
+  Counterparty column and picks are shown per user. When a member without
+  preview access publishes, every classification is dropped first, so lines
+  are never linked by someone who could not see the classification.
+- 2026-11-22 (slice 1): Internal lines publish with a transfer kind and no
+  category.
+  - A line with a mirror entry is linked as a confirmed transfer through
+    `Transfer::Matcher`, one savepoint per line.
+  - A tracked-account line without a mirror keeps its transfer kind, unlinked.
+    No provisional legs are created; `auto_match_transfers!` pairs it once the
+    other side arrives.
+  - An untracked-own line becomes `funds_movement`.
+- 2026-11-22 (slice 1): Lines paid by or to a household member's own name are
+  internal (not a separate "household" class), and so is a card bill payment
+  on the card's own statement. Mirrors must be in the same currency and within
+  7 days.
+- 2026-11-22 (slice 1): `Pdf::StatementParser` keeps a row's detail lines
+  across one blank line and over stray margin characters. Real DBS statements
+  put the "FROM:"/"TO:" lines there, and without them the counterparty is
+  lost.
+- 2026-11-22 (slice 1): Publishing is the only time classifications are
+  applied to a publisher. Under the import's lock, once the publish checks
+  pass, a member without preview access gets plain lines. Any other member
+  keeps links only to accounts they can write to; the rest become
+  "not sure". Rows cannot be edited once publishing starts.
+- 2026-11-22 (slice 1): Reverting or deleting a published import undoes the
+  transfers it made and gives each counterpart back its earlier kind and
+  category, kept on the row when the link was made. A counterpart unlinked or
+  relinked since is left alone.
+- 2026-11-22 (slice 1): SELF / OWN ACCOUNT count only in transfer wording, and
+  never on fee lines. Only a known wallet that is itself topped up counts as
+  own money; any other top-up word must match an account's name.
+- 2026-11-22 (slice 1): Identifier values are encrypted deterministically
+  when encryption is configured, so the per-account uniqueness still holds.
+  Only partial numbers (last four) and holder names are stored.
 
 ## Open questions
 
@@ -301,7 +342,13 @@ None.
 ## Progress
 
 - 2026-11-22: Spec drafted.
+- 2026-11-22: Slice 1 built: identifiers, counterparty parser, classifier,
+  review column, and transfer linking on publish. It was checked locally
+  against real Singapore and Indian bank statements (DBS/POSB, SCB). No
+  statement data was committed.
 
 ## Handoff
 
-Not started.
+Slice 1 is on `feature/FR-004-statement-counterparty-classification`.
+Slices 2 (provisional legs, untracked own accounts) and 3 (learned rules,
+re-classifier, identifier settings UI) are not started.

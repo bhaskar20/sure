@@ -52,6 +52,76 @@ class Pdf::StatementParserTest < ActiveSupport::TestCase
     assert_equal({ start_date: "2026-10-01", end_date: "2026-10-03" }, result.period)
   end
 
+  test "keeps a row's detail lines across a blank line and stray margin characters" do
+    page = <<~TEXT
+                            Transaction Details as at 31 Oct 2026
+      Date          Description                         Withdrawal (-)      Deposit (+)          Balance
+                    Balance Brought Forward                                              1,000.00
+      12/10/2026    Advice FAST Payment / Receipt                                  250.00         1,250.00
+
+                    INCOMING PAYNOW REF 0812345
+      B
+                    FROM: EXAMPLE HOLDER
+      13/10/2026    Advice FAST Payment / Receipt                  40.00                          1,210.00
+                    PAYNOW TRANSFER 8001111
+
+
+                    TERMS AND CONDITIONS APPLY
+                    Balance Carried Forward                                              1,210.00
+    TEXT
+
+    result = Pdf::StatementParser.parse([ page ])
+
+    assert_equal "Advice FAST Payment / Receipt INCOMING PAYNOW REF 0812345 FROM: EXAMPLE HOLDER", result.transactions.first[:name]
+    # Two blank lines end a row, so trailing page text is not folded in.
+    assert_equal "Advice FAST Payment / Receipt PAYNOW TRANSFER 8001111", result.transactions.second[:name]
+  end
+
+  test "a page footer after a blank line or a page number is not folded into the last row" do
+    page_one = <<~TEXT
+                            Transaction Details as at 31 Oct 2026
+      Date          Description                         Withdrawal (-)      Deposit (+)          Balance
+                    Balance Brought Forward                                              1,000.00
+      05/10/2026    GRAB TRANSPORT                         10.00                               990.00
+
+      EXAMPLE BANK LTD CO. REG. NO. 196800306E
+      06/10/2026    GRAB TRANSPORT                         10.00                               980.00
+      2
+    TEXT
+    page_two = <<~TEXT
+      Statement of Account
+      Account No. 027-123456-7
+      Date          Description                         Withdrawal (-)      Deposit (+)          Balance
+      07/10/2026    COFFEE PLACE                            4.50                               975.50
+                    Balance Carried Forward                                                975.50
+    TEXT
+
+    result = Pdf::StatementParser.parse([ page_one, page_two ])
+
+    assert_equal [ "GRAB TRANSPORT", "GRAB TRANSPORT", "COFFEE PLACE" ], result.transactions.map { |t| t[:name] }
+  end
+
+  test "a footer starting with a label word is not taken as a detail line, but a detail line on the next page is" do
+    page_one = <<~TEXT
+                            Transaction Details as at 31 Oct 2026
+      Date          Description                         Withdrawal (-)      Deposit (+)          Balance
+                    Balance Brought Forward                                              1,000.00
+      05/10/2026    GRAB TRANSPORT                          10.00                               990.00
+
+      To report a lost card, call 1800 111 1111
+      06/10/2026    Advice FAST Payment                     12.00                               978.00
+    TEXT
+    page_two = <<~TEXT
+                    TO: EXAMPLE PAYEE
+      Date          Description                         Withdrawal (-)      Deposit (+)          Balance
+                    Balance Carried Forward                                                978.00
+    TEXT
+
+    result = Pdf::StatementParser.parse([ page_one, page_two ])
+
+    assert_equal [ "GRAB TRANSPORT", "Advice FAST Payment TO: EXAMPLE PAYEE" ], result.transactions.map { |t| t[:name] }
+  end
+
   test "reads a credit card statement with CR credits and dates without a year" do
     result = Pdf::StatementParser.parse([ CARD_PAGE ], liability: true)
 

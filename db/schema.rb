@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -20,6 +20,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
   create_enum "account_status", ["ok", "syncing", "error"]
   create_enum "goal_pledge_kind", ["transfer", "manual_save"]
   create_enum "goal_pledge_status", ["open", "matched", "cancelled", "expired"]
+
+  create_table "account_identifiers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "account_id", null: false
+    t.uuid "family_id", null: false
+    t.uuid "account_statement_id"
+    t.string "kind", null: false
+    t.string "value", null: false
+    t.string "source", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "kind", "value"], name: "index_account_identifiers_on_account_id_and_kind_and_value", unique: true
+    t.index ["account_statement_id"], name: "index_account_identifiers_on_account_statement_id"
+    t.index ["family_id", "kind"], name: "index_account_identifiers_on_family_id_and_kind"
+    t.check_constraint "kind::text = ANY (ARRAY['account_last4'::character varying, 'card_last4'::character varying, 'payment_handle'::character varying, 'holder_name'::character varying]::text[])", name: "account_identifiers_kind_known"
+    t.check_constraint "source::text = ANY (ARRAY['statement'::character varying, 'provider'::character varying, 'user'::character varying]::text[])", name: "account_identifiers_source_known"
+  end
 
   create_table "account_providers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "account_id", null: false
@@ -1326,7 +1342,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
     t.string "tags"
     t.string "ticker"
     t.datetime "updated_at", null: false
+    t.string "counterparty_class"
+    t.uuid "counterparty_account_id"
+    t.uuid "counterparty_entry_id"
+    t.decimal "counterparty_confidence", precision: 5, scale: 4
+    t.jsonb "counterparty_reasons", default: [], null: false
+    t.boolean "counterparty_user_set", default: false, null: false
+    t.jsonb "counterparty_restore", default: {}, null: false
+    t.index ["counterparty_account_id"], name: "index_import_rows_on_counterparty_account_id"
+    t.index ["counterparty_entry_id"], name: "index_import_rows_on_counterparty_entry_id"
     t.index ["import_id", "source_row_number"], name: "index_import_rows_on_import_id_and_source_row_number", unique: true
+    t.check_constraint "counterparty_class IS NULL OR (counterparty_class::text = ANY (ARRAY['internal_tracked'::character varying, 'internal_untracked'::character varying, 'external'::character varying, 'unknown'::character varying]::text[]))", name: "import_rows_counterparty_class_known"
     t.check_constraint "source_row_number > 0", name: "chk_import_rows_source_row_number_positive"
   end
 
@@ -3204,6 +3230,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
     t.index ["status"], name: "index_wise_items_on_status"
   end
 
+  add_foreign_key "account_identifiers", "account_statements", on_delete: :cascade
+  add_foreign_key "account_identifiers", "accounts", on_delete: :cascade
+  add_foreign_key "account_identifiers", "families", on_delete: :cascade
   add_foreign_key "account_providers", "accounts", on_delete: :cascade
   add_foreign_key "account_shares", "accounts"
   add_foreign_key "account_shares", "users"
@@ -3302,6 +3331,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_20_100000) do
   add_foreign_key "impersonation_session_logs", "impersonation_sessions"
   add_foreign_key "impersonation_sessions", "users", column: "impersonated_id"
   add_foreign_key "impersonation_sessions", "users", column: "impersonator_id"
+  add_foreign_key "import_rows", "accounts", column: "counterparty_account_id", on_delete: :nullify
+  add_foreign_key "import_rows", "entries", column: "counterparty_entry_id", on_delete: :nullify
   add_foreign_key "import_rows", "imports"
   add_foreign_key "import_sessions", "families"
   add_foreign_key "import_source_mappings", "families"

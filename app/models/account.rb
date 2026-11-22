@@ -16,6 +16,7 @@ class Account < ApplicationRecord
   belongs_to :import, optional: true
 
   has_many :account_shares, dependent: :destroy
+  has_many :account_identifiers, dependent: :destroy
   has_many :shared_users, through: :account_shares, source: :user
   has_many :import_mappings, as: :mappable, dependent: :destroy, class_name: "Import::Mapping"
   has_many :entries, dependent: :destroy

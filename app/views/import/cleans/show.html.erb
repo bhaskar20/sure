@@ -45,8 +45,8 @@
   <div class="pb-12">
     <div class="bg-container-inset rounded-xl p-1 mb-6">
       <div class="overflow-x-auto">
-        <div style="grid-template-columns: repeat(<%= @import.column_keys.count %>, minmax(150px, 1fr));" class="grid items-center uppercase text-xs font-medium text-secondary py-3">
-          <% @import.column_keys.each do |key| %>
+        <div style="grid-template-columns: repeat(<%= review_column_keys(@import).count %>, minmax(150px, 1fr));" class="grid items-center uppercase text-xs font-medium text-secondary py-3">
+          <% review_column_keys(@import).each do |key| %>
             <div class="px-5"><%= import_col_label(key) %></div>
           <% end %>
         </div>

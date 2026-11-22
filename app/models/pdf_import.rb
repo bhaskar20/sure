@@ -4,6 +4,10 @@ class PdfImport < Import
   validates :document_type, inclusion: { in: DOCUMENT_TYPES }, allow_nil: true
   validate :account_statement_matches_import
 
+  # Ahead of the rows and entries being destroyed, while the rows still say
+  # what each linked counterpart was before.
+  before_destroy :release_linked_records!, prepend: true
+
   class << self
     # PdfImport's importing status doubles as a processing claim: the AI
     # extraction claim from process_with_ai_later (no rows yet) or a regular
@@ -120,6 +124,7 @@ class PdfImport < Import
       reconciled_now = []
       reconciled_at = Time.current
 
+      to_link = []
       new_transactions = rows.filter_map do |row|
         if (existing = already_recorded_entry(adapter, row, claimed))
           claimed << existing.id
@@ -127,8 +132,10 @@ class PdfImport < Import
           next
         end
 
-        Transaction.new(
-          category: mappings.categories.mappable_for(row.category),
+        counterparty = counterparty_publish_attributes(row)
+        transaction = Transaction.new(
+          category: counterparty ? nil : mappings.categories.mappable_for(row.category),
+          kind: counterparty&.dig(:kind) || "standard",
           entry: Entry.new(
             account: account,
             date: row.date_iso,
@@ -145,11 +152,85 @@ class PdfImport < Import
             reconciled_by_statement_id: account_statement&.id
           )
         )
+        to_link << [ row, transaction ] if counterparty&.dig(:link)
+        transaction
       end
 
       Transaction.import!(new_transactions, recursive: true) if new_transactions.any?
       reconcile_entries!(reconciled_now, at: reconciled_at)
+      link_counterparts!(to_link)
     end
+  end
+
+  # Accounts beyond the import's own that reverting or deleting it changes:
+  # the other side of each transfer its transactions are part of. Before
+  # publishing there are none; prepare_counterparty_for_publish! keeps only
+  # links the publisher may make.
+  def preexisting_target_account_ids
+    transaction_ids = entries.where(entryable_type: "Transaction").select(:entryable_id)
+    counterpart_ids = Transfer.where(outflow_transaction_id: transaction_ids).select(:inflow_transaction_id)
+    other_side_ids = Transfer.where(inflow_transaction_id: transaction_ids).select(:outflow_transaction_id)
+
+    Entry.where(entryable_type: "Transaction")
+      .where(entryable_id: counterpart_ids).or(Entry.where(entryable_type: "Transaction", entryable_id: other_side_ids))
+      .distinct.pluck(:account_id)
+  end
+
+  # Rows are edited only while the import waits to be published.
+  def configuration_locked?
+    !(pending? || failed?)
+  end
+
+  # Run as the publisher clicks Publish: a member without preview access
+  # publishes plain lines, and a line is only linked to an account the
+  # publisher may write to.
+  def prepare_counterparty_for_publish!(user)
+    return clear_counterparty_classification! unless user&.preview_features_enabled?
+
+    linkable = counterparty_accounts_for(user).unscope(:order).pluck(:id)
+    rows.where(counterparty_class: "internal_tracked")
+      .where("counterparty_account_id IS NULL OR counterparty_account_id NOT IN (?)", linkable.presence || [ nil ])
+      .update_all(counterparty_class: "unknown", counterparty_entry_id: nil)
+  end
+
+  # Statement lines are classified as internal or external only while a family
+  # member has opted into preview features; the review shows the result only
+  # to members who opted in themselves.
+  def counterparty_classification_enabled?
+    account.present? && family.preview_features_enabled?
+  end
+
+  # Drops every classification so publishing imports the lines as plain
+  # transactions, for a member who cannot see the classification.
+  def clear_counterparty_classification!
+    rows.where.not(counterparty_class: nil).update_all(
+      counterparty_class: nil, counterparty_account_id: nil, counterparty_entry_id: nil,
+      counterparty_confidence: nil, counterparty_reasons: [], counterparty_user_set: false, counterparty_restore: {}
+    )
+  end
+
+  # Accounts a reviewer may name as the other side of a line: ones they can
+  # write to, since publishing links a transaction there.
+  def counterparty_accounts_for(user)
+    family.accounts.visible.writable_by(user).where.not(id: account_id).alphabetically
+  end
+
+  # Counted the way publishing by this reviewer will treat each line: one
+  # linked to an account they cannot link to needs a decision.
+  def counterparty_summary(user)
+    visible_ids = counterparty_accounts_for(user).unscope(:order).pluck(:id).to_set
+    counts = Hash.new(0)
+    rows.pluck(:counterparty_class, :counterparty_account_id).each do |klass, account_id|
+      klass = "unknown" if klass == "internal_tracked" && !visible_ids.include?(account_id)
+      counts[klass] += 1
+    end
+    total = counts.values.sum
+    {
+      internal: counts["internal_tracked"] + counts["internal_untracked"],
+      needs_decision: counts["unknown"],
+      total: total,
+      classified: total - counts[nil]
+    }
   end
 
   # Re-targeting is destructive: it releases the statement's evidence on the
@@ -368,7 +449,15 @@ class PdfImport < Import
 
       reconcile_entries!(matched_entries)
 
+      classifications = if counterparty_classification_enabled?
+        remember_statement_identifiers!
+        Import::CounterpartyClassifier.new(self).classify(unmatched)
+      else
+        []
+      end
+
       mapped_rows = unmatched.map.with_index(1) do |row, index|
+        classification = classifications[index - 1]
         {
           import_id: id,
           source_row_number: index,
@@ -377,7 +466,12 @@ class PdfImport < Import
           name: row.name,
           category: row.category,
           notes: row.notes,
-          currency: row.currency
+          currency: row.currency,
+          counterparty_class: classification&.counterparty_class,
+          counterparty_account_id: classification&.account_id,
+          counterparty_entry_id: classification&.entry_id,
+          counterparty_confidence: classification&.confidence,
+          counterparty_reasons: classification&.reasons || []
         }
       end
 
@@ -519,6 +613,99 @@ class PdfImport < Import
     # entries the rest already correspond to. Matching is per-account, so with no
     # account assigned yet every row is treated as new and judged again once the
     # user picks one (see assign_account!).
+    # How a classified line is written. Lines between the family's own
+    # accounts carry no category and a transfer kind, so they stay out of
+    # income and spending; a line to a tracked account is linked to the
+    # other side once both exist.
+    def counterparty_publish_attributes(row)
+      case row.counterparty_class
+      when "internal_tracked"
+        target = row.counterparty_account_id && family.accounts.visible.find_by(id: row.counterparty_account_id)
+        return nil if target.nil? || target.id == account_id
+
+        kind = row.signed_amount.negative? ? "funds_movement" : Transfer.kind_for_account(target, from_account: account)
+        { kind: kind, link: true }
+      when "internal_untracked"
+        { kind: "funds_movement", link: false }
+      end
+    end
+
+    # Each link runs in its own savepoint: a counterpart claimed, edited or
+    # removed since review leaves that line a plain transaction instead of
+    # failing the whole publish.
+    def link_counterparts!(pairs)
+      pairs.each do |row, transaction|
+        counterpart = counterpart_transaction_for(row, transaction)
+        next if counterpart.nil?
+
+        # Linking changes the counterpart's kind (and may add a category);
+        # remembered so reverting this import can put them back.
+        previous = { "entry_id" => counterpart.entry.id, "kind" => counterpart.kind, "category_id" => counterpart.category_id }
+        Transfer.transaction(requires_new: true) do
+          Transfer::Matcher.new(transaction).match_with!(counterpart)
+          row.update_columns(counterparty_restore: previous)
+        end
+      rescue Transfer::Matcher::Error => e
+        DebugLogEntry.capture(
+          category: "import",
+          level: "warn",
+          message: "PdfImport: could not link statement line to its counterpart (#{e.code})",
+          source: "pdf_import",
+          family: family,
+          account: account,
+          metadata: { import_id: id, source_row_number: row.source_row_number, counterparty_account_id: row.counterparty_account_id, error_code: e.code }
+        )
+      end
+    end
+
+    # Undoes each transfer publishing made and gives the counterpart back the
+    # kind and category it had. A counterpart no longer linked to this
+    # import's transaction (unlinked or relinked since) is left as it is now.
+    def release_linked_records!
+      own_transaction_ids = entries.where(entryable_type: "Transaction").pluck(:entryable_id).to_set
+      return if own_transaction_ids.empty?
+
+      rows.where("counterparty_restore <> '{}'::jsonb").find_each do |row|
+        state = row.counterparty_restore
+        counterpart = Entry.find_by(id: state["entry_id"], entryable_type: "Transaction")&.entryable
+        transfer = counterpart&.transfer
+        next if transfer.nil?
+        next unless own_transaction_ids.include?(transfer.inflow_transaction_id) || own_transaction_ids.include?(transfer.outflow_transaction_id)
+
+        transfer.destroy!
+        category_id = family.categories.where(id: state["category_id"]).pick(:id)
+        counterpart.reload.update!(kind: state["kind"], category_id: category_id)
+      end
+    end
+
+    def counterpart_transaction_for(row, transaction)
+      scope = Import::CounterpartyClassifier.mirror_scope(
+        account_ids: [ row.counterparty_account_id ],
+        amounts: [ -transaction.entry.amount ],
+        currencies: [ transaction.entry.currency ],
+        dates: [ transaction.entry.date ]
+      )
+      entry = (row.counterparty_entry_id && scope.find_by(id: row.counterparty_entry_id)) ||
+        scope.order(Arel.sql(ActiveRecord::Base.sanitize_sql_array([ "ABS(entries.date - ?::date), entries.id", transaction.entry.date ]))).first
+      entry&.entryable
+    end
+
+    # What the statement says about the account it is imported into, kept so
+    # other statements' lines can be traced back to it. A statement moved to
+    # another account takes its identifiers with it.
+    def remember_statement_identifiers!
+      return if account_statement.blank? || account.blank?
+
+      AccountIdentifier.release_statement!(account_statement, keep_account_id: account.id)
+      return unless account_statement.account_id == account.id
+
+      AccountIdentifier.remember_from_statement!(
+        account_statement,
+        document_type: document_type,
+        holder_name: extracted_data.is_a?(Hash) ? extracted_data["account_holder"] : nil
+      )
+    end
+
     def partition_already_recorded(candidates)
       return [ candidates, [] ] if account.blank?
 
