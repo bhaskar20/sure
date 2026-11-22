@@ -133,6 +133,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
   test "extract_transactions stores string keys so rows can actually be generated" do
     use_ai_routes
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(success?: true, data: { transactions: [ { date: @date.to_s, amount: "-5.0", name: "Coffee" } ] })
@@ -149,6 +150,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
   test "extract_transactions syncs period and balances to statement_backed import" do
     use_ai_routes
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -179,6 +181,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
   test "extract_transactions ignores inverted dates while syncing valid balances and hints" do
     use_ai_routes
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -213,6 +216,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
   test "extract_transactions handles unparseable date independently without dropping balances" do
     use_ai_routes
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -243,6 +247,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
   test "extract_transactions rejects dates outside Import.reasonable_date_range" do
     use_ai_routes
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -267,6 +272,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
     @statement.update!(currency: "USD", opening_balance: 10.0)
 
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -296,6 +302,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
     @statement.update!(currency: "USD", opening_balance: 10.0, sanitized_parser_output: { "extracted_currency" => "EUR" })
 
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(
@@ -341,6 +348,7 @@ class PdfImportReconciliationTest < ActiveSupport::TestCase
     @statement.update!(institution_name_hint: "Existing Bank", account_last4_hint: "9999")
 
     provider = mock("llm_provider")
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("not under test")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
     provider.stubs(:extract_bank_statement).returns(
       OpenStruct.new(

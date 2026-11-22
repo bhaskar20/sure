@@ -157,6 +157,10 @@ fn open_server_window(handle: &AppHandle, url: Url) {
     let result = WebviewWindowBuilder::new(handle, label, WebviewUrl::External(url))
         .title("Sure")
         .inner_size(1000.0, 800.0)
+        // Tauri's native drop handler swallows file drops, so the page's own
+        // drop targets (CSV and statement uploads) would never see them. The
+        // main window turns it off with `dragDropEnabled` in tauri.conf.json.
+        .disable_drag_drop_handler()
         .on_page_load({
             let page = page.clone();
             let showed_page = showed_page.clone();
@@ -380,5 +384,22 @@ fn notify_download(app: &AppHandle, success: bool, toast: &DownloadToast) {
     let (title, body) = download_notification(success, toast);
     if let Err(error) = app.notification().builder().title(title).body(body).show() {
         eprintln!("[sure] failed to show download notification: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn main_window_lets_the_page_receive_file_drops() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let main = config["app"]["windows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|window| window["label"] == "main")
+            .unwrap();
+
+        assert_eq!(main["dragDropEnabled"], false);
     }
 }
