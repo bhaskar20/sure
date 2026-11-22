@@ -270,6 +270,32 @@ class Provider::Openai < Provider
     end
   end
 
+  def structured_json(instructions:, input:, schema:, operation:, model: "", family: nil)
+    with_provider_response do
+      effective_model = model.presence || @default_model
+      trace = create_langfuse_trace(name: "openai.#{operation}", input: { size: input.to_s.bytesize })
+
+      # Chat completions has no schema parameter that every OpenAI-compatible
+      # host accepts, so the schema rides in the instructions.
+      result = StructuredJsonRequest.new(
+        client,
+        model: effective_model,
+        instructions: "#{instructions}\n\nRespond with ONLY a JSON object matching this JSON Schema:\n#{schema.to_json}",
+        input: input,
+        operation: operation,
+        langfuse_trace: trace,
+        family: family,
+        custom_provider: custom_provider?
+      ).call
+
+      finish_langfuse_trace(trace: trace, output: result)
+      result
+    rescue => error
+      finish_langfuse_trace(trace: trace, output: { error: error.message }, level: "ERROR")
+      raise
+    end
+  end
+
   def suggest_bill_setup(charges: [], categories: [], current_config: nil, model: "", family: nil)
     with_provider_response do
       effective_model = model.presence || @default_model

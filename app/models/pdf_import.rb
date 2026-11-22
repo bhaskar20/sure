@@ -152,6 +152,7 @@ class PdfImport < Import
       PdfImport::CardCredits.new(account: account, transactions: new_transactions).apply! if account.credit_card?
       Transaction.import!(new_transactions, recursive: true) if new_transactions.any?
       reconcile_entries!(reconciled_now, at: reconciled_at)
+      apply_statement_details_to_account!
     end
   end
 
@@ -175,6 +176,7 @@ class PdfImport < Import
         statement.lock!
         statement.link_to_account!(account) if statement.account_id != account.id
       end
+      apply_statement_details_to_account!(account)
 
       next true if previous_account_id == account.id
 
@@ -288,8 +290,60 @@ class PdfImport < Import
       institution_name: statement_institution,
       currency: statement_currency_code,
       balance: (opening if known_start),
-      opening_balance_date: (start_on - 1.day if known_start)
+      opening_balance_date: (start_on - 1.day if known_start),
+      subtype: statement_account_details["subtype"],
+      accountable_attributes: statement_card_terms.presence
     }
+  end
+
+  # What the statement says about its account beyond the rows, as read by
+  # PdfImport::Enricher: the product name, a depository subtype, card terms.
+  def statement_account_details
+    extracted_data&.dig("account_details") || {}
+  end
+
+  CARD_TERMS = %w[available_credit minimum_payment apr annual_fee due_day].freeze
+
+  def statement_card_terms
+    return {} unless statement_account_type == "CreditCard"
+
+    terms = statement_account_details.slice(*CARD_TERMS).compact
+    close_day = account_statement&.period_end_on&.day
+    terms["statement_close_day"] = close_day if close_day
+    terms.symbolize_keys
+  end
+
+  # Fills the account's own details from its statement where the account has
+  # none yet: the bank, a depository subtype, card terms. A card's balance
+  # terms describe this statement, so a later statement replaces them.
+  def apply_statement_details_to_account!(target = account)
+    return unless target
+
+    target.institution_name = statement_institution if target.institution_name.blank? && statement_institution
+    accountable = target.accountable
+    if (subtype = statement_account_details["subtype"]) && accountable.respond_to?(:subtype=) && accountable.subtype.blank? &&
+        accountable.class.const_defined?(:SUBTYPES) && accountable.class::SUBTYPES.key?(subtype)
+      accountable.subtype = subtype
+    end
+    if accountable.is_a?(CreditCard)
+      statement_card_terms.each do |attr, value|
+        next unless accountable.enrichable?(attr)
+        next if attr.in?(%i[due_day statement_close_day]) && accountable.public_send(attr).present?
+
+        accountable.public_send("#{attr}=", value)
+      end
+    end
+    target.save! if target.changed? || accountable.changed?
+  rescue ActiveRecord::RecordInvalid => e
+    DebugLogEntry.capture(
+      category: "import",
+      level: "warn",
+      message: "PdfImport: could not apply statement details to the account (#{e.record.errors.full_messages.to_sentence})",
+      source: "pdf_import",
+      family: family,
+      account: target,
+      metadata: { import_id: id }
+    )
   end
 
   # The opening balance as a number. A model can return it as printed
@@ -316,8 +370,10 @@ class PdfImport < Import
   # "DBS Bank Credit card ••1234": what the statement is, and the digits that
   # let next month's statement find this account again.
   def new_account_name
-    kind = I18n.t("imports.pdf_import.new_account_kind.#{statement_account_type.to_s.underscore}", default: "")
-    [ statement_institution, kind.presence, statement_last4 && "••#{statement_last4}" ].compact.join(" ").presence
+    product = statement_account_details["account_name"].presence
+    product = nil if product && statement_institution && product.downcase.include?(statement_institution.downcase)
+    kind = product || I18n.t("imports.pdf_import.new_account_kind.#{statement_account_type.to_s.underscore}", default: "").presence
+    [ statement_institution, kind, statement_last4 && "••#{statement_last4}" ].compact.join(" ").presence
   end
 
   def statement_last4

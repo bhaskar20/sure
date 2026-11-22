@@ -148,6 +148,7 @@ class PdfImportTest < ActiveSupport::TestCase
   end
 
   test "extract_transactions reads a reconciling text statement without the LLM" do
+    use_no_ai
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
     import.update!(document_type: "credit_card_statement")
     Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
@@ -168,6 +169,7 @@ class PdfImportTest < ActiveSupport::TestCase
   end
 
   test "extract_transactions reads a dated transaction history without the LLM" do
+    use_no_ai
     import = PdfImport.create_from_statement!(statement: create_pdf_statement)
     import.update!(document_type: "bank_statement")
     Pdf::TextExtractor.stubs(:pages).returns([ <<~TEXT ])
@@ -196,6 +198,7 @@ class PdfImportTest < ActiveSupport::TestCase
       data: { transactions: [ { date: "2026-11-02", amount: -9.0, name: "Lunch" } ] },
       error: nil
     ))
+    provider.stubs(:structured_json).returns(Provider::Response.new(success?: false, data: nil, error: Provider::Error.new("offline")))
     Provider::Registry.stubs(:preferred_llm_provider).returns(provider)
 
     data = import.extract_transactions
@@ -531,6 +534,38 @@ class PdfImportTest < ActiveSupport::TestCase
     assert_nil attributes[:balance]
     assert_nil attributes[:opening_balance_date]
     assert_equal "Account", attributes[:name]
+  end
+
+  test "new account takes the product name and subtype the enricher read" do
+    bank = statement_import(document_type: "bank_statement", last4: "4060", institution: "DBS")
+    bank.update!(extracted_data: { "account_details" => { "account_name" => "Multiplier Account", "subtype" => "savings" }, "transactions" => [] })
+
+    assert_equal "DBS Multiplier Account ••4060", bank.new_account_attributes[:name]
+    assert_equal "savings", bank.new_account_attributes[:subtype]
+  end
+
+  test "new card account takes the card terms the enricher read" do
+    card = statement_import(document_type: "credit_card_statement", last4: nil, institution: "DBS")
+    card.update!(extracted_data: { "account_details" => { "available_credit" => 800.0, "apr" => 26.9, "due_day" => 3 }, "transactions" => [] })
+    card.account_statement.update_columns(period_end_on: Date.new(2026, 11, 14))
+
+    assert_equal({ available_credit: 800.0, apr: 26.9, due_day: 3, statement_close_day: 14 }, card.new_account_attributes[:accountable_attributes])
+  end
+
+  test "linking a statement fills the account details it is missing and keeps the rest" do
+    import = statement_import(document_type: "credit_card_statement", last4: nil, institution: "DBS")
+    import.update!(extracted_data: { "account_details" => { "available_credit" => 800.0, "minimum_payment" => 25.0, "due_day" => 3 }, "transactions" => [] })
+    card = @import.family.accounts.create!(name: "Card", balance: 0, currency: "USD", institution_name: nil,
+      accountable: CreditCard.new(due_day: 20, minimum_payment: 10))
+    card.accountable.lock_attr!(:minimum_payment)
+
+    assert import.assign_account!(card)
+
+    card.reload
+    assert_equal "DBS", card.institution_name
+    assert_equal 800, card.accountable.available_credit
+    assert_equal 10, card.accountable.minimum_payment, "a locked value is the user's"
+    assert_equal 20, card.accountable.due_day, "a day the user set stays"
   end
 
   private

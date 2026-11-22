@@ -36,6 +36,13 @@ module Provider::LlmConcept
     raise NotImplementedError, "Subclasses must implement #suggest_bill_setup"
   end
 
+  # A one-off request whose answer is a JSON object matching `schema`. The
+  # caller owns the prompt and validates the answer; the provider only carries
+  # it (json_object output, or a single tool on Anthropic). Returns a Hash.
+  def structured_json(instructions:, input:, schema:, operation:, model: "", family: nil)
+    raise NotImplementedError, "Subclasses must implement #structured_json"
+  end
+
   PdfProcessingResult = Data.define(:summary, :document_type, :extracted_data)
 
   def supports_pdf_processing?
