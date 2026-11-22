@@ -40,6 +40,7 @@
     "allow-dev-accounts",
     "allow-update-status",
     "allow-check-for-updates",
-    "allow-download-update"
+    "allow-download-update",
+    "allow-install-update"
   ]
 }

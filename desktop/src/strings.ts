@@ -38,6 +38,12 @@ export const U = {
   available: (latest: string, v: string) =>
     `Sure ${latest} is available (you have ${v}). Download it, quit Sure, then drag the new Sure into Applications and choose Replace. Your data is kept.`,
   download: (latest: string) => `Download Sure ${latest}`,
+  installable: (latest: string, v: string) =>
+    `Sure ${latest} is available (you have ${v}). Sure installs it and restarts; your data is kept.`,
+  install: (latest: string) => `Install Sure ${latest} and Restart`,
+  installing: (latest: string, percent: number | null) =>
+    percent === null ? `Downloading Sure ${latest}…` : `Downloading Sure ${latest}… ${percent}%`,
+  installFailed: (latest: string, error: string) => `Couldn't install Sure ${latest}: ${error}`,
   failed: (v: string) => `Sure ${v}. Couldn't check for updates; try again later.`,
   disabled: (v: string) => `Sure ${v}. This build doesn't check for updates.`,
 } as const;
