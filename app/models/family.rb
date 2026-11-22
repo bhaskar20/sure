@@ -483,8 +483,25 @@ class Family < ApplicationRecord
   # rule with its action is. Settings → Classifier switches them.
   CLASSIFIER_ACTION_TYPES = %w[fill_similar_merchants bayes_categorize].freeze
 
+  # The AI steps are built-in rules too (AI merchant detection, AI
+  # categorization), below the free ones so they only get what those left.
+  # They start off: turning one on sends transaction data to the configured
+  # AI provider, which may be a cloud service.
+  AI_CLASSIFIER_ACTION_TYPES = %w[auto_detect_merchants auto_categorize].freeze
+  BUILTIN_RULE_ACTION_TYPES = (CLASSIFIER_ACTION_TYPES + AI_CLASSIFIER_ACTION_TYPES).freeze
+
+  CLASSIFIER_RULE_NAME_KEYS = {
+    "fill_similar_merchants" => "merchant_matcher",
+    "bayes_categorize" => "category_classifier",
+    "auto_detect_merchants" => "ai_merchant_detection",
+    "auto_categorize" => "ai_categorization"
+  }.freeze
+
+  # The AI feature each AI rule runs, for asking the router what serves it.
+  AI_CLASSIFIER_FEATURES = { "auto_detect_merchants" => :detect_merchants, "auto_categorize" => :categorize }.freeze
+
   def self.classifier_rule_name(action_type)
-    action_type == "bayes_categorize" ? I18n.t("rules.classifier_rules.category_classifier") : I18n.t("rules.classifier_rules.merchant_matcher")
+    I18n.t("rules.classifier_rules.#{CLASSIFIER_RULE_NAME_KEYS.fetch(action_type)}")
   end
 
   def classifier_rules(action_type)
@@ -906,9 +923,12 @@ class Family < ApplicationRecord
       )
     end
 
-    # Bayes first, so the matcher lands above it.
+    # Each goes in at the top, so the last is added first: Merchant matcher,
+    # Category classifier, AI merchant detection, AI categorization.
     def add_classifier_rules
-      CLASSIFIER_ACTION_TYPES.reverse_each { |action_type| add_classifier_rule!(action_type) }
+      BUILTIN_RULE_ACTION_TYPES.reverse_each do |action_type|
+        add_classifier_rule!(action_type, active: !AI_CLASSIFIER_ACTION_TYPES.include?(action_type))
+      end
     end
 
     def categorizable_transactions

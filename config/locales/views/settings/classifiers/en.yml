@@ -5,6 +5,15 @@ en:
       account:
         account_field: Include the account as one token
         account_field_hint: "Which account a transaction is in counts as evidence. It never decides alone: a transaction needs a known word or merchant."
+      ai:
+        auto_categorize: Categorize with AI
+        auto_categorize_hint: The AI categorization rule, on and off with it in Rules. In your rule order, after each sync, it asks the AI to categorize what the classifier and your rules left uncategorized.
+        auto_detect_merchants: Detect merchants with AI
+        auto_detect_merchants_hint: The AI merchant detection rule, on and off with it in Rules. In your rule order, after each sync, it asks the AI to name the merchant of transactions the matcher and your rules left without one.
+        provider_cloud: "Sends transaction details to %{model} at %{endpoint}."
+        provider_local: "Runs on %{model} on this computer (Local AI); nothing leaves it."
+        provider_none: No AI provider is set up for this, so the rule does nothing while it's on.
+        provider_none_desktop: No AI provider is set up for this. Turn on Local AI to run it on this computer.
       amount:
         amount_by_direction: Include the direction, money in or out
         amount_by_direction_hint: Each category learns which way its money goes, and refunds and purchases at the same shop stay apart.
@@ -113,6 +122,8 @@ en:
         add_rule_cancel: "No"
         add_rule_confirm: Add rule
         add_rule_title: Add the %{name} rule?
+        ai: AI
+        ai_description: AI categorization and AI merchant detection are rules too, off until you turn them on. They run after the classifier and matcher, on what those left, using the AI provider set up for each.
         account: Account tuning
         amount: Amount tuning
         auto_tune: Auto-tune

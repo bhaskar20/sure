@@ -12,6 +12,8 @@ en:
       turn_off_suggestions: "Turn off rule suggestions"
       message: Updated to %{category_name}
     classifier_rules:
+      ai_categorization: AI categorization
+      ai_merchant_detection: AI merchant detection
       category_classifier: Category classifier
       merchant_matcher: Merchant matcher
     filters:

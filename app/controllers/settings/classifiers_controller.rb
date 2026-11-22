@@ -13,8 +13,8 @@ class Settings::ClassifiersController < ApplicationController
     @evaluation = Family::BayesEvaluation.cached(Current.family)
     @evaluation_running = Family::BayesEvaluation.running?(Current.family)
     @weight = Family::BayesEvaluation.weight(Current.family)
-    @rules_active = Family::CLASSIFIER_ACTION_TYPES.index_with { |action_type| Current.family.classifier_rule_active?(action_type) }
-    @add_rule = params[:add_rule].presence_in(Family::CLASSIFIER_ACTION_TYPES)
+    @rules_active = Family::BUILTIN_RULE_ACTION_TYPES.index_with { |action_type| Current.family.classifier_rule_active?(action_type) }
+    @add_rule = params[:add_rule].presence_in(Family::BUILTIN_RULE_ACTION_TYPES)
     @add_rule = nil if @add_rule && Current.family.classifier_rules(@add_rule).exists?
   end
 
@@ -35,7 +35,7 @@ class Settings::ClassifiersController < ApplicationController
     redirect_to settings_classifier_path, alert: e.record.errors.full_messages.to_sentence
   end
 
-  # The matcher's or Bayes' switch, in step with its rule on the Rules page.
+  # A built-in rule's switch, in step with that rule on the Rules page.
   # Turning on one whose rule was deleted asks whether to add it again.
   def rule
     action_type = classifier_action_type
@@ -110,7 +110,7 @@ class Settings::ClassifiersController < ApplicationController
     end
 
     def classifier_action_type
-      params.require(:action_type).presence_in(Family::CLASSIFIER_ACTION_TYPES) || raise(ActionController::BadRequest)
+      params.require(:action_type).presence_in(Family::BUILTIN_RULE_ACTION_TYPES) || raise(ActionController::BadRequest)
     end
 
     def settings_params
