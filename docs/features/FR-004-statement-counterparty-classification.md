@@ -2,10 +2,10 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | In progress |
 | Priority | P1 |
-| Owner | — |
-| Branch | — |
+| Owner | claude-fr-004 |
+| Branch | feature/FR-004-statement-counterparty-classification |
 | PR | — |
 | Depends on | — |
 
