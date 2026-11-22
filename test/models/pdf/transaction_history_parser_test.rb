@@ -31,6 +31,39 @@ class Pdf::TransactionHistoryParserTest < ActiveSupport::TestCase
     assert_equal %w[2026-11-15 2026-11-15 2026-11-13 2026-11-13 2026-10-08], result.transactions.map { |t| t[:date] }
     assert_equal "TRF TOP-UP TO WALLET : alice01 REF000111", result.transactions.first[:name]
     assert_equal({ start_date: "2026-10-08", end_date: "2026-11-15" }, result.period)
+  end
+
+  test "reads the header balance as the closing balance and works back to the opening" do
+    result = Pdf::TransactionHistoryParser.parse([ PAGE_ONE, PAGE_TWO ])
+
+    assert_equal BigDecimal("1234.56"), result.closing_balance
+    assert_equal BigDecimal("-248.76"), result.opening_balance
+  end
+
+  test "reads header amounts printed below a caption" do
+    page = PAGE_ONE.sub("Ledger Balance                         As at:\n", "Ledger Balance\n                                                      As at:\n")
+
+    assert_equal BigDecimal("1234.56"), Pdf::TransactionHistoryParser.parse([ page, PAGE_TWO ]).closing_balance
+  end
+
+  test "prefers the ledger balance to the available balance" do
+    page = PAGE_ONE.sub("SGD 1,234.56               SGD 1,234.56", "SGD 1,200.00               SGD 1,234.56")
+
+    assert_equal BigDecimal("1234.56"), Pdf::TransactionHistoryParser.parse([ page, PAGE_TWO ]).closing_balance
+  end
+
+  test "reads an overdrawn header balance" do
+    page = PAGE_ONE.sub("SGD 1,234.56               SGD 1,234.56", "SGD - 20.00                SGD - 20.00")
+
+    assert_equal BigDecimal("-20"), Pdf::TransactionHistoryParser.parse([ page, PAGE_TWO ]).closing_balance
+  end
+
+  test "leaves the balances out when the header prints none" do
+    page = PAGE_ONE.lines.reject { |line| line.include?("Balance") || line.start_with?("SGD 1,234.56") }.join
+    result = Pdf::TransactionHistoryParser.parse([ page, PAGE_TWO ])
+
+    assert_equal 5, result.transactions.size
+    assert_nil result.closing_balance
     assert_nil result.opening_balance
   end
 

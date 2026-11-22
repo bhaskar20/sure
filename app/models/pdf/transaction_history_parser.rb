@@ -7,6 +7,10 @@
 # could read, every amount is in a row, and the signs follow one convention:
 # "-" for money out, and either "+" or no sign (not both) for money in.
 # Anything else returns nil and the caller falls back to LLM extraction.
+#
+# The header above the first heading may print the account's balance as of
+# the export ("Ledger Balance" over "SGD 1,234.56"). That is the closing
+# balance, and the opening balance is what it was before the listed rows.
 class Pdf::TransactionHistoryParser
   MONTH = "(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\\.?"
   HEADING = /\A(?:[a-z]+[,.]\s+)?(\d{1,2})\s+#{MONTH}\s+(\d{4})[\s|.]*\z/i
@@ -30,6 +34,11 @@ class Pdf::TransactionHistoryParser
   # gives up and the model reads the export instead.
   SUMMARY_LABEL = /\A(?:(?:grand|net|sub-?)\s*)?totals?[\s:]*\z|\A(?:(?:available|ledger|current|closing|opening|ending)\s+)?balance[\s:]*\z/i
   SUMMARY_LIKE = /\b(?:totals?|balance)\b/i
+  # Header labels, most trusted first: the ledger balance counts only posted
+  # transactions, as the rows do, while the available balance can be reduced
+  # by holds the export does not list.
+  BALANCE_LABELS = [ /\bledger\s+balance\b/i, /\bavailable\s+balance\b/i, /\b(?:current\s+)?balance\b/i ].freeze
+  BALANCE_AMOUNT = /(?:\b[A-Z]{3}|S\$|\$)\s?([-+])?\s?(\d{1,3}(?:,\d{3})*\.\d{2})\b/
   MIN_HEADINGS = 2
   MIN_ROWS = 3
 
@@ -45,9 +54,23 @@ class Pdf::TransactionHistoryParser
     rows = []
     headings = 0
     date = nil
+    balance_labels = nil
+    balance = nil
 
     @lines.each do |text|
       next if text.empty?
+
+      unless date || balance
+        # The amounts can sit a line or two below their labels, under an
+        # "As at:" caption printed beside them.
+        if balance_labels && text.match?(BALANCE_AMOUNT)
+          balance = header_balance(balance_labels, text)
+          balance_labels = nil
+        elsif !text.match?(ANY_AMOUNT) && text.match?(BALANCE_LABELS.last)
+          balance_labels = text
+          next
+        end
+      end
 
       if (shape = HEADING_SHAPE.match(text))
         m = HEADING.match(repaired_heading(text, shape))
@@ -78,15 +101,34 @@ class Pdf::TransactionHistoryParser
     return nil unless signs.include?("-") && !(signs.include?("+") && signs.include?(nil))
 
     dates = rows.map { |row| row[:date] }.sort
+    transactions = rows.map { |row| to_transaction(row) }
     Pdf::StatementParser::Result.new(
-      transactions: rows.map { |row| to_transaction(row) },
-      opening_balance: nil,
-      closing_balance: nil,
+      transactions: transactions,
+      opening_balance: balance && balance - rows.sum { |row| row[:sign] == "-" ? -row[:amount] : row[:amount] },
+      closing_balance: balance,
       period: { start_date: dates.first.iso8601, end_date: dates.last.iso8601 }
     )
   end
 
   private
+    # The amount printed under the most trusted balance label. Labels and
+    # amounts are paired in order; when their counts differ, only a lone
+    # amount is safe to read.
+    def header_balance(labels, text)
+      amounts = text.scan(BALANCE_AMOUNT)
+      columns = labels.to_enum(:scan, /\bbalance\b/i).map { Regexp.last_match.begin(0) }
+      return if amounts.empty?
+      return unless amounts.size == 1 || amounts.size == columns.size
+
+      BALANCE_LABELS.each do |label|
+        found = labels.match(label) or next
+        sign, digits = amounts.size == 1 ? amounts.first : amounts[columns.index { |at| at >= found.begin(0) }]
+        value = digits.delete(",").to_d
+        return sign == "-" ? -value : value
+      end
+      nil
+    end
+
     def repaired_heading(text, shape)
       day = shape[1].gsub(/[lio]/i, OCR_DIGITS)
       month = shape[2].gsub(/\d/, OCR_LETTERS)
