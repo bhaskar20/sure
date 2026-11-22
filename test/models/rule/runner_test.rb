@@ -233,6 +233,13 @@ class Rule::RunnerTest < ActiveSupport::TestCase
     assert_equal top, runs.first.rule
     assert_equal "Renamed", @other.reload.entry.name
     assert_equal [ "boom" ], runner.errors.map(&:message)
+
+    entry = runs.first.failure_entries.sole
+    assert_equal "boom", entry.message
+    assert_equal "StandardError", entry.error_class
+    assert_equal "Rule::Runner", entry.source
+    assert_equal runs.first.transactions_queued, entry.transaction_count
+    assert_equal runs.first.id, DebugLogEntry.where(category: "rule_run").recent.first.metadata["rule_run_id"]
   end
 
   test "every action of a rule works on the transactions it matched" do

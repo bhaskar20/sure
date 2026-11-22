@@ -166,6 +166,7 @@ en:
       title: Recent Runs
       description: View the execution history of your rules including success/failure status and transaction counts.
       unnamed_rule: Unnamed Rule
+      view_failure_log: View failure log
       columns:
         date_time: Date/Time
         execution_type: Type
