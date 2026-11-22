@@ -163,9 +163,13 @@ Release—there is no separate desktop action, tag, or version.
 Publish a GitHub Release whose tag is `desktop-v<major>.<minor>.<patch>`
 (Releases → Draft a new release → choose a tag such as `desktop-v0.2.0`,
 created on publish, target `main` → Publish release). That runs
-`.github/workflows/desktop-publish.yml`, which builds both Mac DMGs at the tag
-with `desktop-local-build.yml` and attaches `Sure-macOS-arm64.dmg` and
-`Sure-macOS-x86_64.dmg` to the release, about 45 minutes later. The tag is the
+`.github/workflows/desktop-publish.yml`, which builds the Apple Silicon DMG at
+the tag with `desktop-local-build.yml` and attaches `Sure-macOS-arm64.dmg` to
+the release, about 20 minutes later. Intel builds are turned off for now
+(packaging hangs on the hosted Intel runner), so Intel Macs aren't offered new
+releases; to turn them back on, restore the `x86_64` entry in the
+`desktop-local-build.yml` macOS matrix and the release gets
+`Sure-macOS-x86_64.dmg` too. The tag is the
 app version, so each release must be higher than the last; pre-releases are
 built too but installed apps don't offer them. If the build fails, fix it and
 run **Desktop Publish** by hand from the Actions tab with the release's tag.

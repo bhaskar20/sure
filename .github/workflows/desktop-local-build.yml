@@ -1,7 +1,7 @@
 name: Desktop (local-only) Build
 
 # Builds Sure Desktop with everything bundled — Ruby, the Rails app, PostgreSQL
-# and Valkey — so it runs with no server: a .dmg per Mac architecture and a
+# and Valkey — so it runs with no server: a .dmg for Apple Silicon Macs and a
 # Windows installer (.exe). All user data stays in the app's local data folder.
 # Mac builds are made locally (see desktop/README.md: npm run runtime:mac /
 # build:mac); CI builds them only when a manual run asks for it. Windows,
@@ -53,9 +53,13 @@ jobs:
           - arch: arm64
             runner: macos-15
             rust_target: aarch64-apple-darwin
-          - arch: x86_64
-            runner: macos-15-intel
-            rust_target: x86_64-apple-darwin
+          # Intel (x86_64) builds are off: DMG packaging on the macos-15-intel
+          # runner keeps hanging on `hdiutil detach` until the job times out.
+          # To ship Intel DMGs again, add back:
+          #   - arch: x86_64
+          #     runner: macos-15-intel
+          #     rust_target: x86_64-apple-darwin
+          # desktop-publish.yml attaches whichever architectures were built.
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
