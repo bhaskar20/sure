@@ -1,0 +1,8 @@
+<%# locals: (own_untracked_account:, import_row_id: nil) %>
+
+<%= styled_form_with model: own_untracked_account, class: "space-y-4", data: { turbo_frame: :_top } do |f| %>
+  <p class="text-sm text-secondary"><%= t("own_untracked_accounts.form.hint") %></p>
+  <%= f.text_field :name, label: t("own_untracked_accounts.form.name"), placeholder: t("own_untracked_accounts.form.placeholder"), autofocus: true, required: true %>
+  <%= hidden_field_tag :import_row_id, import_row_id if import_row_id %>
+  <%= f.submit t(own_untracked_account.persisted? ? "own_untracked_accounts.form.update" : "own_untracked_accounts.form.create") %>
+<% end %>

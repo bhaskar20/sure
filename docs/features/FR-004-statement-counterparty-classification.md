@@ -2,11 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | In progress |
+| Status | In review |
 | Priority | P1 |
 | Owner | claude-fr-004 |
-| Branch | Slice 1: feature/FR-004-statement-counterparty-classification; slice 2: feature/FR-004-slice-2-provisional-legs |
-| PR | Slice 1: [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
+| Branch | feature/FR-004-statement-counterparty-classification (slices 1 and 2) |
+| PR | Slices 1 and 2: [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
 | Depends on | — |
 
 ## Problem
@@ -328,6 +328,32 @@ adds by hand that we missed (recall proxy).
   unlinked with a transfer kind, as in slice 1, and the link is only
   suggested. Provider-linked accounts get no leg either; their sync delivers
   the other side.
+- 2026-11-23 (slice 2): Legs go only into active, manual cash accounts
+  (bank and card) in the line's currency. A balance counts as hand-set if it
+  is any balance update or a non-zero opening balance, whoever wrote it: the
+  family, a restored export, a CSV of balances, or a statement prefill. A leg
+  is also skipped when that account already holds an unlinked entry that
+  looks like the other side within 7 days, or one of its statements covers
+  the date. The review tooltip applies the same rule.
+- 2026-11-23 (slice 2): A leg is the publishing import's entry, not yet
+  reconciled. The other account's statement claims it in two passes: exact
+  matches first, then the nearest leg within 7 days and inside that
+  statement's period. Publish, revert and row generation lock the accounts
+  involved in id order. Reverting or deleting the import that wrote a leg
+  removes it unless it was claimed. A claimed leg passes to the claiming
+  import and keeps its transfer kind.
+- 2026-11-23 (slice 2): OwnUntrackedAccount records the family's own accounts
+  outside Sure: a name, no balance. Identifiers belong to exactly one tracked
+  or untracked account. Lines can be classified to an untracked account, and
+  published transactions point to it (shown as "Name (not in Sure)"). The
+  review offers "Add an account not in Sure". A preview-gated settings page
+  manages them. A data reset deletes them uncounted, so the reset API shape
+  is unchanged.
+- 2026-11-23 (slice 2): A line the reviewer assigns by hand teaches that
+  account the partial numbers it prints. Payment handles are learned from
+  outgoing lines only, since an incoming line's handle is the holder's own.
+  The statement's own numbers, and values another account already owns, are
+  never learned. Reverting the import forgets what its review taught.
 
 ## Open questions
 
@@ -350,8 +376,12 @@ None.
   against real Singapore and Indian bank statements (DBS/POSB, SCB). No
   statement data was committed.
 
+- 2026-11-23: Slice 2 built: provisional legs claimed in either import order,
+  untracked own accounts, and identifiers learned from review. It was checked
+  locally against the same real statements.
+
 ## Handoff
 
-Slice 1 is on `feature/FR-004-statement-counterparty-classification`.
-Slices 2 (provisional legs, untracked own accounts) and 3 (learned rules,
-re-classifier, identifier settings UI) are not started.
+Both slices are on `feature/FR-004-statement-counterparty-classification`
+(bhaskar20/sure#13). Slice 3 (learned rules,
+re-classifier, identifier settings UI) is not started.

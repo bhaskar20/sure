@@ -139,6 +139,9 @@ class Family::FinancialDataReset
       scope(:merchants).destroy_all
       delete_provider_items!
       family.financekit_account_lineages.destroy_all
+      # Not counted: the reset report is a public API shape, and these are
+      # labels without money of their own.
+      family.own_untracked_accounts.destroy_all
       scope(:accounts).destroy_all
     end
 

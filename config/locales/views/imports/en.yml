@@ -346,6 +346,7 @@ en:
     counterparty:
       groups:
         own_accounts: "Your accounts"
+        untracked_accounts: "Your accounts not in Sure"
         other: "Elsewhere"
       options:
         unclassified: "Not classified"
@@ -353,6 +354,17 @@ en:
         external: "Someone else"
         unknown: "Not sure"
         unknown_with_suggestion: "Not sure, maybe %{account}?"
+        add_untracked: "Add an account not in Sure…"
+      plan:
+        link: "Will be linked to the matching entry in %{account}"
+        leg: "Will add the other side to %{account} until its own statement is imported"
+        unlinked_currency: "Stays unlinked: %{account} uses another currency"
+        unlinked_inactive: "Stays unlinked: %{account} is not active"
+        unlinked_linked: "Stays unlinked: %{account} syncs from your bank, which will bring the other side"
+        unlinked_not_cash: "Stays unlinked: %{account} is valued, not run from transactions"
+        unlinked_hand_set_balance: "Stays unlinked: %{account} has a balance you set by hand"
+        unlinked_existing_entry: "Stays unlinked: %{account} already has an entry that looks like the other side"
+        unlinked_statement_covers: "Stays unlinked: a statement of %{account} covers this date"
       reasons:
         user_set: "Chosen in the review"
         identifier: "Names %{value}, which is %{account}"

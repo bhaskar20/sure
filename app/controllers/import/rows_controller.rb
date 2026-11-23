@@ -37,6 +37,8 @@ class Import::RowsController < ApplicationController
 
       if choice.start_with?("account:")
         return {} unless @import.counterparty_accounts_for(Current.user).exists?(id: choice.delete_prefix("account:"))
+      elsif choice.start_with?("untracked:")
+        return {} unless Current.family.own_untracked_accounts.exists?(id: choice.delete_prefix("untracked:"))
       end
 
       { counterparty_choice: choice }

@@ -10,10 +10,14 @@
             url: import_row_path(row.import, row),
             method: :patch,
             data: {
-              controller: "auto-submit-form mobile-cell-interaction",
+              controller: key == :counterparty && !Current.user&.guest? ? "auto-submit-form mobile-cell-interaction counterparty-select" : "auto-submit-form mobile-cell-interaction",
               auto_submit_form_trigger_value: "blur",
               mobile_cell_interaction_error_value: !cell_is_valid?(row, key) ? row.errors[key].join(", ") : "",
-            }
+            }.merge(key == :counterparty && !Current.user&.guest? ? {
+              action: "submit->counterparty-select#intercept",
+              counterparty_select_new_url_value: new_own_untracked_account_path(import_row_id: row.id),
+              counterparty_select_current_value: counterparty_effective_choice(row).to_s,
+            } : {})
           ) do |form| %>
         <div class="relative">
           <% if key == :counterparty %>
@@ -22,6 +26,7 @@
                   {},
                   "data-auto-submit-form-target": "auto",
                   "data-autosubmit-trigger-event": "change",
+                  "data-counterparty-select-target": "select",
                   "aria-label": import_col_label(:counterparty),
                   title: counterparty_reasons_text(row),
                   id: dom_id(row, :counterparty_choice),

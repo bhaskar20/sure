@@ -126,6 +126,38 @@ class Import::CounterpartyReviewTest < ActionDispatch::IntegrationTest
     assert_select "select[title=?]", I18n.t("imports.counterparty.reasons.not_linkable")
   end
 
+  test "the picker offers the family's accounts not in Sure, and a way to add one" do
+    wallet = @family.own_untracked_accounts.create!(name: "PayLah wallet")
+
+    get import_clean_path(@import)
+
+    assert_select "option[value='untracked:#{wallet.id}']", text: "PayLah wallet"
+    assert_select "option[value='new_untracked']"
+    assert_select "form[data-controller~='counterparty-select']"
+  end
+
+  test "a reviewer can name an account not in Sure, but not another family's" do
+    wallet = @family.own_untracked_accounts.create!(name: "Wallet")
+    theirs = families(:empty).own_untracked_accounts.create!(name: "Theirs")
+
+    patch import_row_path(@import, @row), params: { import_row: { counterparty_choice: "untracked:#{theirs.id}" } }
+    assert_equal "external", @row.reload.counterparty_class
+
+    patch import_row_path(@import, @row), params: { import_row: { counterparty_choice: "untracked:#{wallet.id}" } }
+    assert_equal [ "internal_untracked", wallet.id ], [ @row.reload.counterparty_class, @row.counterparty_untracked_account_id ]
+  end
+
+  test "the tooltip says what publishing will do with a line to a tracked account" do
+    @row.update!(counterparty_choice: "account:#{@savings.id}")
+
+    get import_clean_path(@import)
+    assert_select "select[title*=?]", I18n.t("imports.counterparty.plan.leg", account: "Savings")
+
+    create_valuation_for(@savings)
+    get import_clean_path(@import)
+    assert_select "select[title*=?]", I18n.t("imports.counterparty.plan.unlinked_hand_set_balance", account: "Savings")
+  end
+
   test "the statement review card summarises the transfers it found" do
     PdfImport.any_instance.stubs(:pdf_uploaded?).returns(true)
     @row.update!(counterparty_choice: "internal_untracked")
@@ -137,6 +169,10 @@ class Import::CounterpartyReviewTest < ActionDispatch::IntegrationTest
   end
 
   private
+    def create_valuation_for(account)
+      account.entries.create!(date: Date.current - 10, amount: 100, currency: account.currency, name: "Balance", entryable: Valuation.new(kind: "reconciliation"))
+    end
+
     def enable_preview(user)
       user.update!(preferences: (user.preferences || {}).merge("preview_features_enabled" => true))
     end

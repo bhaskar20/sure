@@ -1,7 +1,7 @@
 # How an account appears on other statements, so a line in one statement
 # ("TRANSFER TO A/C XX4821") can be traced to another of the family's
-# accounts. Only partial numbers and names are kept, never a full account or
-# card number.
+# accounts, tracked or not. Only partial numbers and names are kept, never a
+# full account or card number.
 class AccountIdentifier < ApplicationRecord
   include Encryptable
 
@@ -14,19 +14,23 @@ class AccountIdentifier < ApplicationRecord
     encrypts :value, deterministic: true
   end
 
-  belongs_to :account
+  belongs_to :account, optional: true
+  belongs_to :own_untracked_account, optional: true
   belongs_to :family
   belongs_to :account_statement, optional: true
+  belongs_to :learned_by_import, class_name: "Import", optional: true
 
   validates :kind, inclusion: { in: KINDS }
   validates :source, inclusion: { in: SOURCES }
   validates :value, presence: true, length: { maximum: 120 }
   validates :value, format: { with: /\A\d{4}\z/ }, if: -> { kind.in?(LAST4_KINDS) }
+  validate :one_owner
   validate :family_matches_account
 
   normalizes :value, with: ->(value) { value.to_s.squish }
 
   scope :for_visible_accounts, -> { joins(:account).merge(Account.visible) }
+  scope :for_untracked_accounts, -> { where.not(own_untracked_account_id: nil) }
 
   class << self
     # Records what a statement linked to an account says about that account.
@@ -56,6 +60,47 @@ class AccountIdentifier < ApplicationRecord
         identifier
       rescue ActiveRecord::RecordNotUnique
         find_by(account: account, kind: attrs[:kind], value: attrs[:value])
+      end
+    end
+
+    # Learns the partial numbers and payment handles a statement line names
+    # once a reviewer has said which account (tracked or not) the line is
+    # about. The statement's own card number is never learned.
+    #
+    # A handle on an incoming line is the statement holder's own (PayNow
+    # "FROM: X ... TO +65 own number"), so handles are learned from outgoing
+    # lines only. Values of the statement's own account (exclude_values) and
+    # values another account already owns are never learned: either would
+    # make every later line naming them ambiguous.
+    def learn_from_line!(owner, hints, import: nil, outgoing: true, exclude_values: [])
+      owner_key = owner.is_a?(OwnUntrackedAccount) ? :own_untracked_account : :account
+      exclude = exclude_values.map { |value| value.to_s.downcase }.to_set
+      values = (hints.account_fragments - hints.own_card_fragments).map { |last4| [ owner_key == :account && owner.credit_card? ? "card_last4" : "account_last4", last4 ] }
+      # A wallet top-up's handle is usually the holder's own phone, which their
+      # bank also prints on incoming lines.
+      values += hints.handles.map { |handle| [ "payment_handle", handle ] } if outgoing && hints.wallet_topup.blank?
+      values.reject! { |_, value| exclude.include?(value.to_s.downcase) }
+
+      owner_ref = [ owner_key, owner.id ]
+      owners_by_value = where(family_id: owner.family_id).to_a.group_by { |other| other.value.to_s.downcase }
+      # Accounts created from a statement carry their last four in the name.
+      named = owner.family.accounts.where.not(id: owner_key == :account ? owner.id : nil)
+        .flat_map { |account| "#{account.name} #{account.institution_name}".scan(Import::CounterpartyClassifier::MASKED_LAST4).flatten }.to_set
+      values.filter_map do |kind, value|
+        next if named.include?(value) || owners_by_value.fetch(value.to_s.downcase, []).any? { |other| other.owner_ref != owner_ref }
+
+        identifier = find_or_initialize_by(owner_key => owner, kind: kind, value: value)
+        if identifier.persisted?
+          # Confirmed by a second import's review: no longer one import's to forget.
+          identifier.update_columns(learned_by_import_id: nil) if import && identifier.learned_by_import_id && identifier.learned_by_import_id != import.id
+          next identifier
+        end
+
+        identifier.assign_attributes(family_id: owner.family_id, source: "user", learned_by_import_id: import&.id)
+        transaction(requires_new: true) { identifier.save! }
+        identifier
+      rescue ActiveRecord::RecordNotUnique
+        find_by(owner_key => owner, kind: kind, value: value)
       end
     end
 
@@ -92,10 +137,19 @@ class AccountIdentifier < ApplicationRecord
       end
   end
 
-  private
-    def family_matches_account
-      return if account.blank? || family_id.blank?
+  def owner_ref
+    own_untracked_account_id ? [ :own_untracked_account, own_untracked_account_id ] : [ :account, account_id ]
+  end
 
-      errors.add(:family, :invalid) unless account.family_id == family_id
+  private
+    def one_owner
+      errors.add(:base, :invalid) unless [ account_id, own_untracked_account_id ].compact.one? || [ account, own_untracked_account ].compact.one?
+    end
+
+    def family_matches_account
+      owner = account || own_untracked_account
+      return if owner.blank? || family_id.blank?
+
+      errors.add(:family, :invalid) unless owner.family_id == family_id
     end
 end

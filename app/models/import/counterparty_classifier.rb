@@ -8,8 +8,18 @@
 # evidence is classified as a transfer to a tracked account; weaker evidence is
 # offered as a suggestion for the user to confirm, and conflicting evidence is
 # never applied.
+#
+# The family's own accounts outside Sure (OwnUntrackedAccount) take part with
+# the identifiers and names they have; they are keyed "untracked:<id>" so
+# they never collide with a tracked account, and have no entries to mirror.
 class Import::CounterpartyClassifier
-  Classification = Data.define(:counterparty_class, :account_id, :entry_id, :confidence, :reasons)
+  Classification = Data.define(:counterparty_class, :account_id, :entry_id, :confidence, :reasons, :untracked_account_id) do
+    def initialize(untracked_account_id: nil, **rest)
+      super
+    end
+  end
+
+  UNTRACKED_PREFIX = "untracked:"
 
   CLASSES = %w[internal_tracked internal_untracked external unknown].freeze
 
@@ -100,7 +110,10 @@ class Import::CounterpartyClassifier
         end
       end
 
-      hints.handles.each do |handle|
+      # On an incoming line the handle is usually the holder's own (PayNow
+      # "FROM: X ... TO +65 own number"), never the counterparty.
+      handles = row.signed_amount.negative? ? [] : hints.handles
+      handles.each do |handle|
         handle_index.fetch(handle, []).each do |account_id|
           add(scores, account_id, :identifier, { "code" => "identifier", "value" => handle })
         end
@@ -184,7 +197,15 @@ class Import::CounterpartyClassifier
       best_account_id, best = ranked.first
       # Two accounts with the same evidence: naming either would be a guess.
       best = nil if best && ranked.second && ranked.second.last[:score] == best[:score]
-      if best && best[:score] >= CANDIDATE_FLOOR
+      if best && best[:score] >= CANDIDATE_FLOOR && untracked_key?(best_account_id)
+        total = (best[:score] + (generic.positive? ? WEIGHTS[:generic_bonus] : 0)).clamp(0, 1)
+        if total >= SUGGEST_THRESHOLD
+          # Naming the wrong untracked account only mislabels a transfer, so
+          # what the family taught it is enough to apply.
+          return Classification.new(counterparty_class: "internal_untracked", account_id: nil, entry_id: nil, confidence: total.round(4),
+            reasons: tag(best[:reasons], best_account_id) + generic_reasons, untracked_account_id: untracked_id(best_account_id))
+        end
+      elsif best && best[:score] >= CANDIDATE_FLOOR
         total = best[:score]
         total += WEIGHTS[:generic_bonus] if generic.positive?
         total = total.clamp(0, 1)
@@ -216,8 +237,25 @@ class Import::CounterpartyClassifier
       entry[:reasons] << reason.merge("weight" => weight_key.to_s)
     end
 
-    def tag(reasons, account_id)
-      reasons.map { |reason| reason.except("weight").merge("account_id" => account_id) }
+    def tag(reasons, key)
+      owner = untracked_key?(key) ? { "untracked_account_id" => untracked_id(key) } : { "account_id" => key }
+      reasons.map { |reason| reason.except("weight").merge(owner) }
+    end
+
+    def untracked_key?(key)
+      key.to_s.start_with?(UNTRACKED_PREFIX)
+    end
+
+    def untracked_id(key)
+      key.to_s.delete_prefix(UNTRACKED_PREFIX)
+    end
+
+    def untracked_key(id)
+      "#{UNTRACKED_PREFIX}#{id}"
+    end
+
+    def untracked_accounts
+      @untracked_accounts ||= import.family.own_untracked_accounts.to_a
     end
 
     # Accounts a line may name: the family's visible accounts other than the
@@ -231,16 +269,25 @@ class Import::CounterpartyClassifier
     end
 
     def identifiers
-      @identifiers ||= import.family.account_identifiers.for_visible_accounts.to_a
+      @identifiers ||= import.family.account_identifiers.for_visible_accounts.to_a +
+        import.family.account_identifiers.for_untracked_accounts.to_a
+    end
+
+    # The key an identifier's owner scores under, or nil when the owner cannot
+    # be named on this line (the import's own account, or a hidden one).
+    def owner_key(identifier)
+      return untracked_key(identifier.own_untracked_account_id) if identifier.own_untracked_account_id
+      identifier.account_id if other_account_ids.include?(identifier.account_id)
     end
 
     def last4_index
       @last4_index ||= begin
         index = Hash.new { |hash, key| hash[key] = [] }
         identifiers.each do |identifier|
-          next unless identifier.kind.in?(AccountIdentifier::LAST4_KINDS) && other_account_ids.include?(identifier.account_id)
+          key = owner_key(identifier)
+          next unless key && identifier.kind.in?(AccountIdentifier::LAST4_KINDS)
 
-          index[identifier.value] << identifier.account_id
+          index[identifier.value] << key unless index[identifier.value].include?(key)
         end
         # Accounts created from a statement carry their last four in the name
         # ("DBS Altitude ••8105"); keep honouring that.
@@ -255,9 +302,10 @@ class Import::CounterpartyClassifier
 
     def handle_index
       @handle_index ||= identifiers.each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |identifier, index|
-        next unless identifier.kind == "payment_handle" && other_account_ids.include?(identifier.account_id)
+        key = owner_key(identifier)
+        next unless key && identifier.kind == "payment_handle"
 
-        index[identifier.value.downcase] << identifier.account_id
+        index[identifier.value.downcase] << key unless index[identifier.value.downcase].include?(key)
       end
     end
 
@@ -282,7 +330,8 @@ class Import::CounterpartyClassifier
       words = name_words(text)
       return [] if words.empty?
 
-      other_accounts.select { |other| (words - name_words("#{other.name} #{other.institution_name}")).empty? }.map(&:id)
+      other_accounts.select { |other| (words - name_words("#{other.name} #{other.institution_name}")).empty? }.map(&:id) +
+        untracked_accounts.select { |untracked| (words - name_words(untracked.name)).empty? }.map { |untracked| untracked_key(untracked.id) }
     end
 
     def holder_accounts_for(name)

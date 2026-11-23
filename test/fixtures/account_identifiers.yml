@@ -1,1 +1,9 @@
-# Empty fixture file so account_identifiers is cleaned with the rest of the test fixture set.
+# One row so tests that touch every encrypted table (security_backfill_test)
+# update it rather than insert a row that would need an owner. On an account
+# no counterparty test names.
+other_asset_last4:
+  account: other_asset
+  family: dylan_family
+  kind: account_last4
+  value: "0000"
+  source: user

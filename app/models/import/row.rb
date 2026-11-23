@@ -39,11 +39,13 @@ class Import::Row < ApplicationRecord
   COUNTERPARTY_CHOICES = %w[internal_untracked external unknown].freeze
 
   # The reviewer's pick from the Counterparty column: "account:<id>" for one of
-  # the family's accounts, or a class without an account. The caller checks
-  # that the account is one the reviewer may link to.
+  # the family's accounts, "untracked:<id>" for one of its accounts outside
+  # Sure, or a class without an account. The caller checks that the account
+  # is one the reviewer may name.
   def counterparty_choice
     return if counterparty_class.blank?
     return "account:#{counterparty_account_id}" if counterparty_class == "internal_tracked" && counterparty_account_id.present?
+    return "untracked:#{counterparty_untracked_account_id}" if counterparty_class == "internal_untracked" && counterparty_untracked_account_id.present?
 
     # Linked to an account deleted since; publishing treats it as a plain line.
     counterparty_class == "internal_tracked" ? "unknown" : counterparty_class
@@ -58,10 +60,20 @@ class Import::Row < ApplicationRecord
       self.counterparty_entry_id = nil unless account_id == counterparty_account_id
       self.counterparty_class = "internal_tracked"
       self.counterparty_account_id = account_id
+      self.counterparty_untracked_account_id = nil
+    elsif choice.start_with?("untracked:")
+      untracked_id = choice.delete_prefix("untracked:")
+      return if untracked_id.blank?
+
+      self.counterparty_class = "internal_untracked"
+      self.counterparty_untracked_account_id = untracked_id
+      self.counterparty_account_id = nil
+      self.counterparty_entry_id = nil
     elsif choice.in?(COUNTERPARTY_CHOICES)
       self.counterparty_class = choice
       self.counterparty_account_id = nil
       self.counterparty_entry_id = nil
+      self.counterparty_untracked_account_id = nil
     else
       return
     end

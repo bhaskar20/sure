@@ -66,6 +66,8 @@ class PdfImportCounterpartyTest < ActiveSupport::TestCase
 
   test "an account number plus a self marker classifies without a mirror, and publishes as a transfer kind" do
     identify(@savings, "4821")
+    # A balance set by hand keeps the other side from being written (slice 2).
+    create_valuation(account: @savings, amount: 500, date: @date - 30, kind: "reconciliation")
 
     row = generate(extracted(amount: -880.25, name: "NEFT/SELF/XXXX4821")).sole
     assert_equal "internal_tracked", row.counterparty_class
@@ -87,7 +89,7 @@ class PdfImportCounterpartyTest < ActiveSupport::TestCase
     assert_equal card.id, row.counterparty_account_id
 
     @import.import!
-    assert_equal "cc_payment", @import.entries.sole.entryable.kind
+    assert_equal "cc_payment", @import.entries.where(account: @checking).sole.entryable.kind
   end
 
   test "a mirror alone is only a suggestion" do
@@ -180,6 +182,8 @@ class PdfImportCounterpartyTest < ActiveSupport::TestCase
 
   test "a counterpart claimed after review leaves the line a plain transaction" do
     identify(@savings, "4821")
+    # A balance set by hand keeps a provisional leg out of it (slice 2).
+    create_valuation(account: @savings, amount: 500, date: @date - 30, kind: "reconciliation")
     mirror = create_transaction(account: @savings, date: @date, amount: -1234.56, name: "Deposit")
     generate(extracted(amount: -1234.56, name: "TRANSFER TO A/C XXXX4821"))
 
