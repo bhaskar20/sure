@@ -133,6 +133,30 @@ class Provider::Anthropic < Provider
     end
   end
 
+  def structured_json(instructions:, input:, schema:, operation:, model: "", family: nil)
+    with_provider_response do
+      effective_model = model.presence || @default_model
+      trace = create_langfuse_trace(name: "anthropic.#{operation}", input: { size: input.to_s.bytesize })
+
+      result = StructuredJsonRequest.new(
+        client,
+        model: effective_model,
+        instructions: instructions,
+        input: input,
+        schema: schema,
+        operation: operation,
+        langfuse_trace: trace,
+        family: family
+      ).call
+
+      finish_langfuse_trace(trace: trace, output: result)
+      result
+    rescue => error
+      finish_langfuse_trace(trace: trace, output: { error: error.message }, level: "ERROR")
+      raise
+    end
+  end
+
   def suggest_bill_setup(charges: [], categories: [], current_config: nil, model: "", family: nil)
     with_provider_response do
       effective_model = model.presence || @default_model

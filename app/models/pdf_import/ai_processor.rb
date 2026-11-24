@@ -39,8 +39,22 @@ class PdfImport::AiProcessor
     # exactly as assigned until the record is reloaded, so without this the
     # in-memory read comes back empty and the import produces no rows at all.
     data = (extract_transactions_with_rules || extract_transactions_with_model).deep_stringify_keys
+    data = enrich(data)
     pdf_import.update!(extracted_data: data)
     data
+  end
+
+  # Asks the model for whatever extraction left empty: balances, period,
+  # currency, bank, account number and type, card terms, readable names.
+  # Rules read most statements without a model, so this is skipped when none
+  # is set up, and a failed request keeps what extraction found.
+  def enrich(data)
+    return data unless Ai.available?(:extract_pdf, family: pdf_import.family)
+
+    provider = Provider::Registry.preferred_llm_provider
+    return data unless provider
+
+    PdfImport::Enricher.new(pdf_import, provider: provider).enrich(data)
   end
 
   # A statement whose rows reconcile against its own balances, or a dated
