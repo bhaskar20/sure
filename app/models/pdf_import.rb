@@ -176,6 +176,18 @@ class PdfImport < Import
     end
   end
 
+  # The statement account's last four digits as the statement itself gave
+  # them, or as the family entered them. One only a model supplied
+  # (PdfImport::Enricher, checked just for being printed somewhere) may be a
+  # counterparty's number from a row, so it is neither evidence about which
+  # account a line names nor put in a new account's name.
+  def statement_identifier_last4
+    last4 = account_statement&.account_last4_hint.presence
+    return last4 unless last4 && extracted_data.is_a?(Hash) && Array(extracted_data["ai_filled"]).include?("account_last4")
+
+    last4 unless extracted_data["account_number"].to_s.gsub(/\D/, "").last(4) == last4
+  end
+
   # Accounts beyond the import's own that reverting or deleting it changes:
   # the other side of each transfer its transactions are part of. Before
   # publishing there are none; prepare_counterparty_for_publish! keeps only
@@ -465,7 +477,8 @@ class PdfImport < Import
     product = statement_account_details["account_name"].presence
     product = nil if product && statement_institution && product.downcase.include?(statement_institution.downcase)
     kind = product || I18n.t("imports.pdf_import.new_account_kind.#{statement_account_type.to_s.underscore}", default: "").presence
-    [ statement_institution, kind, statement_last4 && "••#{statement_last4}" ].compact.join(" ").presence
+    last4 = statement_identifier_last4
+    [ statement_institution, kind, last4 && "••#{last4}" ].compact.join(" ").presence
   end
 
   def statement_last4
@@ -514,6 +527,7 @@ class PdfImport < Import
           date: format_date_for_import(txn["date"]),
           amount: txn["amount"].to_s,
           name: txn["name"].to_s,
+          original_name: txn["original_name"].presence,
           category: txn["category"].to_s,
           notes: txn["notes"].to_s,
           currency: currency
@@ -540,6 +554,7 @@ class PdfImport < Import
           date: row.date,
           amount: row.amount,
           name: row.name,
+          original_name: row.original_name,
           category: row.category,
           notes: row.notes,
           currency: row.currency,
@@ -847,7 +862,7 @@ class PdfImport < Import
         next if owner.nil?
 
         AccountIdentifier.learn_from_line!(
-          owner, Transaction::CounterpartyParser.parse([ row.name, row.notes ].compact_blank.join(" ")),
+          owner, Transaction::CounterpartyParser.parse(row.counterparty_text),
           import: self, outgoing: row.signed_amount.positive?, exclude_values: own_identifier_values
         )
       end
@@ -858,7 +873,7 @@ class PdfImport < Import
     def own_identifier_values
       @own_identifier_values ||= begin
         values = account.account_identifiers.pluck(:value)
-        values << account_statement.account_last4_hint if account_statement&.account_last4_hint.present?
+        values << statement_identifier_last4 if statement_identifier_last4
         values += "#{account.name} #{account.institution_name}".scan(Import::CounterpartyClassifier::MASKED_LAST4).flatten
         values.map { |value| value.to_s.downcase }.to_set
       end
@@ -888,7 +903,8 @@ class PdfImport < Import
       AccountIdentifier.remember_from_statement!(
         account_statement,
         document_type: document_type,
-        holder_name: extracted_data.is_a?(Hash) ? extracted_data["account_holder"] : nil
+        holder_name: extracted_data.is_a?(Hash) ? extracted_data["account_holder"] : nil,
+        last4: statement_identifier_last4
       )
     end
 

@@ -100,7 +100,18 @@ class PdfImport::EnricherTest < ActiveSupport::TestCase
 
     assert_equal [ "PayLah! top-up", "Salary from Example Co" ], data["transactions"].map { |row| row["name"] }
     assert_equal "row 0", data["transactions"].first["notes"]
+    assert_equal [ "row 0", "row 1" ], data["transactions"].map { |row| row["original_name"] }
     assert_includes data["ai_filled"], "transaction_names"
+  end
+
+  test "keeps the bank's text ahead of a reference already in the notes" do
+    answers(fill_statement_gaps: {}, clean_transaction_names: { "names" => [ { "i" => 0, "name" => "Transfer to savings" } ] })
+    transactions = [ { "date" => "2026-11-10", "amount" => -50.0, "name" => "FUND TRANSFER TO A/C XX4821 SELF", "notes" => "TF58123" } ]
+    data = PdfImport::Enricher.new(@import, provider: @provider).enrich({ "transactions" => transactions })
+
+    row = data["transactions"].sole
+    assert_equal [ "Transfer to savings", "FUND TRANSFER TO A/C XX4821 SELF", "FUND TRANSFER TO A/C XX4821 SELF TF58123" ],
+      row.values_at("name", "original_name", "notes")
   end
 
   test "keeps what extraction found when the model fails" do

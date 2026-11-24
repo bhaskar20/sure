@@ -22,6 +22,21 @@ class Import::Row < ApplicationRecord
     Date.strptime(date, import.date_format).iso8601
   end
 
+  # The statement's own words for the line, which classifying it as internal
+  # or external reads: the printed description rather than a readable name
+  # written for it, plus whatever reference the notes add to it.
+  def counterparty_text
+    original = original_name.to_s.strip
+    if original.empty?
+      # Rows renamed before the original was kept separately: the enricher
+      # put the printed text in the notes, so it is read first.
+      return [ notes, name ].compact_blank.join(" ") if renamed_without_original?
+      return [ name, notes ].compact_blank.join(" ")
+    end
+
+    [ original, notes.to_s.strip.delete_prefix(original).squish ].compact_blank.join(" ")
+  end
+
   def signed_amount
     if import.type == "TradeImport"
       price.to_d * apply_trade_signage_convention(qty.to_d)
@@ -85,6 +100,11 @@ class Import::Row < ApplicationRecord
   end
 
   private
+    def renamed_without_original?
+      notes.present? && import.is_a?(PdfImport) && import.extracted_data.is_a?(Hash) &&
+        Array(import.extracted_data["ai_filled"]).include?("transaction_names")
+    end
+
     # Supports historical comma-delimited exports and pipe-delimited templates.
     # Backslash escapes comma, pipe, and backslash so tag names can contain either delimiter.
     def split_tags(value)

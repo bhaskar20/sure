@@ -35,12 +35,12 @@ class AccountIdentifier < ApplicationRecord
   class << self
     # Records what a statement linked to an account says about that account.
     # Idempotent: a statement re-linked or re-read adds nothing twice.
-    def remember_from_statement!(statement, document_type: nil, holder_name: nil)
+    def remember_from_statement!(statement, document_type: nil, holder_name: nil, last4: statement&.account_last4_hint)
       account = statement&.account
       return [] if account.blank?
 
       candidates = []
-      last4 = statement.account_last4_hint.to_s
+      last4 = last4.to_s
       if last4.match?(/\A\d{4}\z/)
         kind = document_type.to_s == "credit_card_statement" || account.accountable_type == "CreditCard" ? "card_last4" : "account_last4"
         candidates << { kind: kind, value: last4 }

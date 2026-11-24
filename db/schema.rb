@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -1356,6 +1356,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100000) do
     t.boolean "counterparty_user_set", default: false, null: false
     t.jsonb "counterparty_restore", default: {}, null: false
     t.uuid "counterparty_untracked_account_id"
+    t.string "original_name"
     t.index ["counterparty_account_id"], name: "index_import_rows_on_counterparty_account_id"
     t.index ["counterparty_entry_id"], name: "index_import_rows_on_counterparty_entry_id"
     t.index ["counterparty_untracked_account_id"], name: "index_import_rows_on_counterparty_untracked_account_id"

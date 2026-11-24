@@ -482,6 +482,53 @@ class PdfImportCounterpartyTest < ActiveSupport::TestCase
     assert_equal [ other.id ], @checking.account_identifiers.pluck(:account_statement_id)
   end
 
+  test "a line given a readable name is classified from the statement's own words" do
+    wallet = @family.accounts.create!(name: "PayLah wallet", balance: 0, currency: "USD", accountable: Depository.new, owner: @admin)
+    identify(@savings, "4821")
+    renamed = ->(amount, name, original, notes = original) { extracted(amount: amount, name: name).merge("original_name" => original, "notes" => notes) }
+
+    rows = generate(
+      renamed.call(-20, "PayLah! top-up", "TOP-UP TO PAYLAH! : 91234567"),
+      renamed.call(2500, "Transfer from Bob Dylan", "INCOMING PAYNOW FROM: BOB DYLAN"),
+      renamed.call(-4321.5, "Transfer to savings", "ONLINE TRANSFER TO A/C XXXX4821 SELF", "ONLINE TRANSFER TO A/C XXXX4821 SELF TF58123")
+    )
+
+    assert_equal [ [ "internal_tracked", wallet.id ], [ "internal_untracked", nil ], [ "internal_tracked", @savings.id ] ],
+      rows.map { |row| [ row.counterparty_class, row.counterparty_account_id ] }
+    assert_equal "TOP-UP TO PAYLAH! : 91234567", rows.first.original_name
+    assert_equal "ONLINE TRANSFER TO A/C XXXX4821 SELF TF58123", rows.last.counterparty_text
+  end
+
+  test "a last four only the model read is not taken as the statement's own account" do
+    @statement.update!(account_last4_hint: "4821")
+    identify(@savings, "4821")
+
+    row = generate(extracted(amount: -4321.5, name: "ONLINE TRANSFER TO A/C XXXX4821 SELF"), ai_filled: [ "account_last4" ], account_number: "4821").sole
+
+    assert_equal [ "internal_tracked", @savings.id ], [ row.counterparty_class, row.counterparty_account_id ]
+    assert_empty @checking.account_identifiers.where(value: "4821")
+    assert_not_includes @import.new_account_name.to_s, "4821"
+  end
+
+  test "a last four the family corrected after the model read one is the statement's own" do
+    @statement.update!(account_last4_hint: "6789")
+
+    generate(extracted(amount: -10.5, name: "BOOKSTORE"), ai_filled: [ "account_last4" ], account_number: "4821")
+
+    assert_equal [ "6789" ], @checking.account_identifiers.where(kind: "account_last4").pluck(:value)
+  end
+
+  test "a line renamed before the original was kept apart is read from its notes" do
+    wallet = @family.accounts.create!(name: "PayLah wallet", balance: 0, currency: "USD", accountable: Depository.new, owner: @admin)
+
+    row = generate(
+      extracted(amount: -20, name: "PayLah! top-up").merge("notes" => "TOP-UP TO PAYLAH! : 91234567"),
+      ai_filled: [ "transaction_names" ]
+    ).sole
+
+    assert_equal [ "internal_tracked", wallet.id ], [ row.counterparty_class, row.counterparty_account_id ]
+  end
+
   private
     def create_statement
       AccountStatement.create_from_upload!(

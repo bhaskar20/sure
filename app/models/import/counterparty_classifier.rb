@@ -97,7 +97,7 @@ class Import::CounterpartyClassifier
 
   private
     def classify_row(row, mirrors, claimed_entry_ids)
-      hints = Transaction::CounterpartyParser.parse([ row.name, row.notes ].compact_blank.join(" "))
+      hints = Transaction::CounterpartyParser.parse(row.counterparty_text)
       scores = Hash.new { |hash, key| hash[key] = { score: 0.to_d, reasons: [] } }
       generic = 0.to_d
       generic_reasons = []
@@ -314,7 +314,7 @@ class Import::CounterpartyClassifier
     def own_last4_values
       @own_last4_values ||= begin
         values = identifiers.select { |identifier| identifier.account_id == account.id && identifier.kind.in?(AccountIdentifier::LAST4_KINDS) }.map(&:value)
-        values << import.account_statement.account_last4_hint if import.respond_to?(:account_statement) && import.account_statement&.account_last4_hint.present?
+        values << import.statement_identifier_last4 if import.respond_to?(:statement_identifier_last4) && import.statement_identifier_last4
         values += "#{account.name} #{account.institution_name}".scan(MASKED_LAST4).flatten
         values.uniq
       end
