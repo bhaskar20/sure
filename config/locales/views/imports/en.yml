@@ -342,6 +342,44 @@ en:
       category_icon: "Lucide icon"
       merchant_color: "Color"
       merchant_website: "Website URL"
+      counterparty: "Counterparty"
+    counterparty:
+      groups:
+        own_accounts: "Your accounts"
+        untracked_accounts: "Your accounts not in Sure"
+        other: "Elsewhere"
+      options:
+        unclassified: "Not classified"
+        internal_untracked: "Your account, not in Sure"
+        external: "Someone else"
+        unknown: "Not sure"
+        unknown_with_suggestion: "Not sure, maybe %{account}?"
+        add_untracked: "Add an account not in Sure…"
+      plan:
+        link: "Will be linked to the matching entry in %{account}"
+        leg: "Will add the other side to %{account} until its own statement is imported"
+        unlinked_currency: "Stays unlinked: %{account} uses another currency"
+        unlinked_inactive: "Stays unlinked: %{account} is not active"
+        unlinked_linked: "Stays unlinked: %{account} syncs from your bank, which will bring the other side"
+        unlinked_not_cash: "Stays unlinked: %{account} is valued, not run from transactions"
+        unlinked_hand_set_balance: "Stays unlinked: %{account} has a balance you set by hand"
+        unlinked_existing_entry: "Stays unlinked: %{account} already has an entry that looks like the other side"
+        unlinked_statement_covers: "Stays unlinked: a statement of %{account} covers this date"
+      reasons:
+        user_set: "Chosen in the review"
+        identifier: "Names %{value}, which is %{account}"
+        mirror_entry: "Matches an entry in %{account} on %{date}"
+        account_name: "Mentions %{value}, like %{account}"
+        holder_name: "Paid by or to the holder of %{account}"
+        card_payment: "Pays a card bill"
+        card_payment_received: "A payment towards this card's bill"
+        card_payment_to_card: "Pays the bill of %{account}"
+        not_linkable: "Points to an account you can't change, so it will be imported as a plain transaction"
+        only_card: "Pays a card bill, and %{account} is your only card"
+        self_marker: "Marked as a transfer to yourself"
+        own_name: "Paid by or to %{name}, a member of your household"
+        wallet_topup: "Tops up your %{wallet} wallet"
+        conflict: "Points to more than one of your accounts"
     summary:
       title: "Import summary"
       subtitle: "What became of each transaction on this statement in %{account}."
@@ -602,6 +640,14 @@ en:
       other: Other Document
       unknown: Unknown Document
     pdf_import:
+      counterparty_title: Transfers between your accounts
+      counterparty_internal:
+        zero: None of the %{total} lines look like money moving between your own accounts.
+        one: 1 of %{total} lines looks like money moving between your own accounts.
+        other: "%{count} of %{total} lines look like money moving between your own accounts."
+      counterparty_needs_decision:
+        one: 1 line needs your decision in the review.
+        other: "%{count} lines need your decision in the review."
       processing_title: Processing your PDF
       processing_description: We're analyzing your document using AI. This may take a moment. You'll receive an email when the analysis is complete.
       check_status: Check status

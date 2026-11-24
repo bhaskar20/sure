@@ -2,11 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | In review |
 | Priority | P1 |
-| Owner | — |
-| Branch | — |
-| PR | — |
+| Owner | claude-fr-004 |
+| Branch | feature/FR-004-statement-counterparty-classification (slices 1 and 2) |
+| PR | Slices 1 and 2: [bhaskar20/sure#13](https://github.com/bhaskar20/sure/pull/13) |
 | Depends on | — |
 
 ## Problem
@@ -282,11 +282,81 @@ adds by hand that we missed (recall proxy).
 - 2026-11-22: Anything applied without the user reviewing it (re-classifier)
   stays a pending suggestion, matching how `auto_match_transfers!` treats its
   own guesses.
+- 2026-11-22 (slice 1): Only PDF statement imports are classified. CSV
+  imports can span several accounts per file and are left for later.
+- 2026-11-22 (slice 1): Classification itself needs no model, but a PDF
+  import still does: `ProcessPdfJob` asks a model to classify and summarize
+  the document before extraction.
+- 2026-11-22 (slice 1): Rows are classified while any household member has
+  opted into preview features, because the job has no current user. The
+  Counterparty column and picks are shown per user. When a member without
+  preview access publishes, every classification is dropped first, so lines
+  are never linked by someone who could not see the classification.
+- 2026-11-22 (slice 1): Internal lines publish with a transfer kind and no
+  category.
+  - A line with a mirror entry is linked as a confirmed transfer through
+    `Transfer::Matcher`, one savepoint per line.
+  - A tracked-account line without a mirror keeps its transfer kind, unlinked.
+    No provisional legs are created; `auto_match_transfers!` pairs it once the
+    other side arrives.
+  - An untracked-own line becomes `funds_movement`.
+- 2026-11-22 (slice 1): Lines paid by or to a household member's own name are
+  internal (not a separate "household" class), and so is a card bill payment
+  on the card's own statement. Mirrors must be in the same currency and within
+  7 days.
+- 2026-11-22 (slice 1): `Pdf::StatementParser` keeps a row's detail lines
+  across one blank line and over stray margin characters. Real DBS statements
+  put the "FROM:"/"TO:" lines there, and without them the counterparty is
+  lost.
+- 2026-11-22 (slice 1): Publishing is the only time classifications are
+  applied to a publisher. Under the import's lock, once the publish checks
+  pass, a member without preview access gets plain lines. Any other member
+  keeps links only to accounts they can write to; the rest become
+  "not sure". Rows cannot be edited once publishing starts.
+- 2026-11-22 (slice 1): Reverting or deleting a published import undoes the
+  transfers it made and gives each counterpart back its earlier kind and
+  category, kept on the row when the link was made. A counterpart unlinked or
+  relinked since is left alone.
+- 2026-11-22 (slice 1): SELF / OWN ACCOUNT count only in transfer wording, and
+  never on fee lines. Only a known wallet that is itself topped up counts as
+  own money; any other top-up word must match an account's name.
+- 2026-11-22 (slice 1): Identifier values are encrypted deterministically
+  when encryption is configured, so the per-account uniqueness still holds.
+  Only partial numbers (last four) and holder names are stored.
+- 2026-11-23 (slice 2, product owner): Provisional legs are never created on a
+  manual account with a balance the user set by hand. There the line stays
+  unlinked with a transfer kind, as in slice 1, and the link is only
+  suggested. Provider-linked accounts get no leg either; their sync delivers
+  the other side.
+- 2026-11-23 (slice 2): Legs go only into active, manual cash accounts
+  (bank and card) in the line's currency. A balance counts as hand-set if it
+  is any balance update or a non-zero opening balance, whoever wrote it: the
+  family, a restored export, a CSV of balances, or a statement prefill. A leg
+  is also skipped when that account already holds an unlinked entry that
+  looks like the other side within 7 days, or one of its statements covers
+  the date. The review tooltip applies the same rule.
+- 2026-11-23 (slice 2): A leg is the publishing import's entry, not yet
+  reconciled. The other account's statement claims it in two passes: exact
+  matches first, then the nearest leg within 7 days and inside that
+  statement's period. Publish, revert and row generation lock the accounts
+  involved in id order. Reverting or deleting the import that wrote a leg
+  removes it unless it was claimed. A claimed leg passes to the claiming
+  import and keeps its transfer kind.
+- 2026-11-23 (slice 2): OwnUntrackedAccount records the family's own accounts
+  outside Sure: a name, no balance. Identifiers belong to exactly one tracked
+  or untracked account. Lines can be classified to an untracked account, and
+  published transactions point to it (shown as "Name (not in Sure)"). The
+  review offers "Add an account not in Sure". A preview-gated settings page
+  manages them. A data reset deletes them uncounted, so the reset API shape
+  is unchanged.
+- 2026-11-23 (slice 2): A line the reviewer assigns by hand teaches that
+  account the partial numbers it prints. Payment handles are learned from
+  outgoing lines only, since an incoming line's handle is the holder's own.
+  The statement's own numbers, and values another account already owns, are
+  never learned. Reverting the import forgets what its review taught.
 
 ## Open questions
 
-- Should provisional legs be created on manual accounts that use balance
-  anchors (valuations), or only suggested there? (Product owner.)
 - Do spouses/partners in the same family count as "internal" for budgets, or
   should they be a fourth class ("household")? (Product owner.)
 - How long should the re-classifier look back by default — 13 months, or the
@@ -301,7 +371,17 @@ None.
 ## Progress
 
 - 2026-11-22: Spec drafted.
+- 2026-11-22: Slice 1 built: identifiers, counterparty parser, classifier,
+  review column, and transfer linking on publish. It was checked locally
+  against real Singapore and Indian bank statements (DBS/POSB, SCB). No
+  statement data was committed.
+
+- 2026-11-23: Slice 2 built: provisional legs claimed in either import order,
+  untracked own accounts, and identifiers learned from review. It was checked
+  locally against the same real statements.
 
 ## Handoff
 
-Not started.
+Both slices are on `feature/FR-004-statement-counterparty-classification`
+(bhaskar20/sure#13). Slice 3 (learned rules,
+re-classifier, identifier settings UI) is not started.

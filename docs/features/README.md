@@ -12,7 +12,7 @@ handoff notes.
 | FR-001 | Local coding harness for changing Sure itself | Dropped | P1 | — | — | [spec](FR-001-local-coding-harness.md) |
 | FR-002 | Mini apps: plug-in apps with their own UI and data access | In progress | P1 | claude-fr-002 | — | [spec](FR-002-miniapps.md) |
 | FR-003 | Extract any supported data from an uploaded PDF | Proposed | P1 | — | — | [spec](FR-003-pdf-document-extraction.md) |
-| FR-004 | Classify imported statement lines as internal or external | Proposed | P1 | — | — | [spec](FR-004-statement-counterparty-classification.md) |
+| FR-004 | Classify imported statement lines as internal or external | In review | P1 | claude-fr-004 | — | [spec](FR-004-statement-counterparty-classification.md) |
 
 ## Statuses
 

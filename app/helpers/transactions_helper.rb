@@ -186,7 +186,8 @@ module TransactionsHelper
       other_leg&.cache_key_with_version,
       account_key.(counterpart),
       (category_key.(other_leg.category) if transfer && !outflow_leg),
-      transaction.activity_security&.cache_key_with_version
+      transaction.activity_security&.cache_key_with_version,
+      transaction.own_untracked_account&.cache_key_with_version
     ]
   end
 

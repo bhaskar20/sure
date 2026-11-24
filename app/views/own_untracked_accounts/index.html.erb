@@ -1,0 +1,48 @@
+<%= content_for :page_title, t(".title") %>
+<%= content_for :page_actions do %>
+  <% unless Current.user&.guest? %>
+    <%= render DS::Link.new(
+      text: t(".new"),
+      variant: "primary",
+      href: new_own_untracked_account_path,
+      icon: "plus",
+      frame: :modal
+    ) %>
+  <% end %>
+<% end %>
+
+<div class="bg-container rounded-xl shadow-border-xs p-4 space-y-4">
+  <div class="flex items-center gap-2">
+    <p class="text-sm text-secondary"><%= t(".description") %></p>
+    <%= render DS::Pill.new(label: t("shared.preview")) %>
+  </div>
+
+  <% if @own_untracked_accounts.any? %>
+    <div class="rounded-xl bg-container-inset space-y-1 p-1">
+      <div class="flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-secondary uppercase">
+        <p><%= t(".title") %></p>
+        <span class="text-subdued">&middot;</span>
+        <p><%= @own_untracked_accounts.count %></p>
+      </div>
+
+      <div class="bg-container rounded-lg shadow-border-xs">
+        <div class="overflow-hidden rounded-lg">
+          <% @own_untracked_accounts.each_with_index do |own_untracked_account, index| %>
+            <%= render "shared/ruler" if index.positive? %>
+            <%= render "own_untracked_accounts/own_untracked_account", own_untracked_account: own_untracked_account %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  <% else %>
+    <div class="flex justify-center items-center py-20">
+      <div class="text-center flex flex-col items-center max-w-[300px]">
+        <p class="text-primary mb-1 font-medium text-sm"><%= t(".empty") %></p>
+
+        <% unless Current.user&.guest? %>
+          <%= render DS::Link.new(text: t(".new"), icon: "plus", href: new_own_untracked_account_path, frame: :modal) %>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
+</div>

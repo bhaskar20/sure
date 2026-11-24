@@ -55,6 +55,11 @@ class AccountStatement < ApplicationRecord
             allow_nil: true
   validates :parser_confidence, :match_confidence, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 1 }, allow_nil: true
   validate :account_belongs_to_family
+
+  # What the statement said about an account stops counting once it is moved,
+  # unlinked, corrected or deleted.
+  after_update :release_stale_account_identifiers, if: -> { saved_change_to_account_id? || saved_change_to_account_last4_hint? }
+  before_destroy { AccountIdentifier.release_statement!(self) }
   validate :suggested_account_belongs_to_family
   validate :period_order
   validate :currency_is_valid
@@ -403,6 +408,13 @@ class AccountStatement < ApplicationRecord
 
       self.review_status = "linked" if account.present? && !linked?
       self.review_status = "unmatched" if account.blank? && linked?
+    end
+
+    def release_stale_account_identifiers
+      AccountIdentifier.release_statement!(self, keep_account_id: account_id) if saved_change_to_account_id?
+      if saved_change_to_account_last4_hint?
+        AccountIdentifier.release_statement!(self, kinds: AccountIdentifier::LAST4_KINDS, keep_value: account_last4_hint)
+      end
     end
 
     def account_belongs_to_family

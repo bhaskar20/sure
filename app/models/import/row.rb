@@ -22,6 +22,21 @@ class Import::Row < ApplicationRecord
     Date.strptime(date, import.date_format).iso8601
   end
 
+  # The statement's own words for the line, which classifying it as internal
+  # or external reads: the printed description rather than a readable name
+  # written for it, plus whatever reference the notes add to it.
+  def counterparty_text
+    original = original_name.to_s.strip
+    if original.empty?
+      # Rows renamed before the original was kept separately: the enricher
+      # put the printed text in the notes, so it is read first.
+      return [ notes, name ].compact_blank.join(" ") if renamed_without_original?
+      return [ name, notes ].compact_blank.join(" ")
+    end
+
+    [ original, notes.to_s.strip.delete_prefix(original).squish ].compact_blank.join(" ")
+  end
+
   def signed_amount
     if import.type == "TradeImport"
       price.to_d * apply_trade_signage_convention(qty.to_d)
@@ -36,7 +51,60 @@ class Import::Row < ApplicationRecord
     import.sync_mappings
   end
 
+  COUNTERPARTY_CHOICES = %w[internal_untracked external unknown].freeze
+
+  # The reviewer's pick from the Counterparty column: "account:<id>" for one of
+  # the family's accounts, "untracked:<id>" for one of its accounts outside
+  # Sure, or a class without an account. The caller checks that the account
+  # is one the reviewer may name.
+  def counterparty_choice
+    return if counterparty_class.blank?
+    return "account:#{counterparty_account_id}" if counterparty_class == "internal_tracked" && counterparty_account_id.present?
+    return "untracked:#{counterparty_untracked_account_id}" if counterparty_class == "internal_untracked" && counterparty_untracked_account_id.present?
+
+    # Linked to an account deleted since; publishing treats it as a plain line.
+    counterparty_class == "internal_tracked" ? "unknown" : counterparty_class
+  end
+
+  def counterparty_choice=(choice)
+    choice = choice.to_s
+    if choice.start_with?("account:")
+      account_id = choice.delete_prefix("account:")
+      return if account_id.blank?
+
+      self.counterparty_entry_id = nil unless account_id == counterparty_account_id
+      self.counterparty_class = "internal_tracked"
+      self.counterparty_account_id = account_id
+      self.counterparty_untracked_account_id = nil
+    elsif choice.start_with?("untracked:")
+      untracked_id = choice.delete_prefix("untracked:")
+      return if untracked_id.blank?
+
+      self.counterparty_class = "internal_untracked"
+      self.counterparty_untracked_account_id = untracked_id
+      self.counterparty_account_id = nil
+      self.counterparty_entry_id = nil
+    elsif choice.in?(COUNTERPARTY_CHOICES)
+      self.counterparty_class = choice
+      self.counterparty_account_id = nil
+      self.counterparty_entry_id = nil
+      self.counterparty_untracked_account_id = nil
+    else
+      return
+    end
+    self.counterparty_user_set = true
+  end
+
+  def counterparty_internal?
+    counterparty_class.in?(%w[internal_tracked internal_untracked])
+  end
+
   private
+    def renamed_without_original?
+      notes.present? && import.is_a?(PdfImport) && import.extracted_data.is_a?(Hash) &&
+        Array(import.extracted_data["ai_filled"]).include?("transaction_names")
+    end
+
     # Supports historical comma-delimited exports and pipe-delimited templates.
     # Backslash escapes comma, pipe, and backslash so tag names can contain either delimiter.
     def split_tags(value)

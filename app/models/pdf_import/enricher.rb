@@ -238,12 +238,14 @@ class PdfImport::Enricher
     # -- Transaction names ----------------------------------------------------
 
     # Turns bank text ("TRF TOP-UP TO PAYLAH! : 93415445 TF58...") into a name
-    # a person would write. The original stays in the notes, so references and
-    # account numbers are not lost.
+    # a person would write. The original stays in the notes, ahead of any
+    # reference already there, so account numbers are not lost, and in
+    # "original_name", which classifying the line reads.
     def clean_transaction_names(data)
       rows = Array(data["transactions"])
       return false if rows.empty?
 
+      rows.each { |row| row["original_name"] = row["original_name"].presence || row["name"].to_s.strip }
       changed = false
       rows.each_slice(NAME_BATCH_SIZE).with_index do |batch, batch_index|
         offset = batch_index * NAME_BATCH_SIZE
@@ -264,7 +266,9 @@ class PdfImport::Enricher
           row = rows[index]
           next if name.nil? || name == row["name"].to_s.strip
 
-          row["notes"] = row["name"] if row["notes"].blank?
+          original = row["original_name"]
+          notes = row["notes"].to_s.strip
+          row["notes"] = notes.start_with?(original) ? notes : [ original, notes ].compact_blank.join(" ")
           row["name"] = name
           changed = true
         end

@@ -1,0 +1,30 @@
+---
+en:
+  own_untracked_accounts:
+    index:
+      title: Accounts not in Sure
+      description: Your own accounts that Sure does not track, like a wallet or an account at a bank you have not added. Money moving to or from them is a transfer, not income or spending.
+      new: New account
+      empty: No accounts yet. Add one, or pick "Add an account not in Sure" when reviewing a statement.
+    own_untracked_account:
+      edit: Edit
+      delete: Delete
+    form:
+      hint: Statement lines paying this account will be counted as transfers between your own money.
+      name: Name
+      placeholder: e.g. PayLah wallet
+      create: Add account
+      update: Save
+    new:
+      title: Add an account not in Sure
+    edit:
+      title: Edit account
+    create:
+      created: Account added
+      locked: This statement is already being imported, so the line can no longer change
+      error: "Could not add the account: %{error}"
+    update:
+      updated: Account updated
+      error: "Could not update the account: %{error}"
+    destroy:
+      deleted: Account deleted

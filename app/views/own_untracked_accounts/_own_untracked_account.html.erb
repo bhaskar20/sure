@@ -1,0 +1,20 @@
+<%# locals: (own_untracked_account:) %>
+
+<div id="<%= dom_id(own_untracked_account) %>" class="flex justify-between items-center p-4 bg-container hover:bg-surface-hover">
+  <p class="text-primary text-sm truncate"><%= own_untracked_account.name %></p>
+  <% unless Current.user&.guest? %>
+    <div class="justify-self-end">
+      <%= render DS::Menu.new do |menu| %>
+        <% menu.with_item(variant: "link", text: t(".edit"), href: edit_own_untracked_account_path(own_untracked_account), icon: "pencil", data: { turbo_frame: "modal" }) %>
+        <% menu.with_item(
+          variant: "button",
+          text: t(".delete"),
+          href: own_untracked_account_path(own_untracked_account),
+          icon: "trash-2",
+          method: :delete,
+          confirm: CustomConfirm.for_resource_deletion(own_untracked_account.name)
+        ) %>
+      <% end %>
+    </div>
+  <% end %>
+</div>

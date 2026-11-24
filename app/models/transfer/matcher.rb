@@ -67,7 +67,9 @@ class Transfer::Matcher
     end
   end
 
-  def match_to_account!(account, dry_run: false)
+  # entry_attributes are added to the counterpart entry, for a caller that
+  # owns it (a statement import writing a provisional leg).
+  def match_to_account!(account, dry_run: false, entry_attributes: {})
     link!(transaction, dry_run:) do
       ensure_matchable!(transaction)
       raise Error.new(:same_account, "The target account must differ from the transaction's account.") if account.id == entry.account_id
@@ -80,7 +82,8 @@ class Transfer::Matcher
           currency: entry.currency,
           date: entry.date,
           name: "Transfer to #{entry.amount.negative? ? entry.account.name : account.name}",
-          user_modified: true
+          user_modified: true,
+          **entry_attributes
         )
       )
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -20,6 +20,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
   create_enum "account_status", ["ok", "syncing", "error"]
   create_enum "goal_pledge_kind", ["transfer", "manual_save"]
   create_enum "goal_pledge_status", ["open", "matched", "cancelled", "expired"]
+
+  create_table "account_identifiers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "account_id"
+    t.uuid "family_id", null: false
+    t.uuid "account_statement_id"
+    t.string "kind", null: false
+    t.string "value", null: false
+    t.string "source", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.uuid "own_untracked_account_id"
+    t.uuid "learned_by_import_id"
+    t.index ["account_id", "kind", "value"], name: "index_account_identifiers_on_account_id_and_kind_and_value", unique: true
+    t.index ["account_statement_id"], name: "index_account_identifiers_on_account_statement_id"
+    t.index ["family_id", "kind"], name: "index_account_identifiers_on_family_id_and_kind"
+    t.index ["learned_by_import_id"], name: "index_account_identifiers_on_learned_by_import_id"
+    t.index ["own_untracked_account_id", "kind", "value"], name: "index_account_identifiers_on_untracked_owner_kind_value", unique: true, where: "(own_untracked_account_id IS NOT NULL)"
+    t.check_constraint "kind::text = ANY (ARRAY['account_last4'::character varying, 'card_last4'::character varying, 'payment_handle'::character varying, 'holder_name'::character varying]::text[])", name: "account_identifiers_kind_known"
+    t.check_constraint "num_nonnulls(account_id, own_untracked_account_id) = 1", name: "account_identifiers_one_owner"
+    t.check_constraint "own_untracked_account_id IS NULL OR account_statement_id IS NULL", name: "account_identifiers_untracked_not_from_statement"
+    t.check_constraint "source::text = ANY (ARRAY['statement'::character varying, 'provider'::character varying, 'user'::character varying]::text[])", name: "account_identifiers_source_known"
+  end
 
   create_table "account_providers", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "account_id", null: false
@@ -1326,7 +1348,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
     t.string "tags"
     t.string "ticker"
     t.datetime "updated_at", null: false
+    t.string "counterparty_class"
+    t.uuid "counterparty_account_id"
+    t.uuid "counterparty_entry_id"
+    t.decimal "counterparty_confidence", precision: 5, scale: 4
+    t.jsonb "counterparty_reasons", default: [], null: false
+    t.boolean "counterparty_user_set", default: false, null: false
+    t.jsonb "counterparty_restore", default: {}, null: false
+    t.uuid "counterparty_untracked_account_id"
+    t.string "original_name"
+    t.index ["counterparty_account_id"], name: "index_import_rows_on_counterparty_account_id"
+    t.index ["counterparty_entry_id"], name: "index_import_rows_on_counterparty_entry_id"
+    t.index ["counterparty_untracked_account_id"], name: "index_import_rows_on_counterparty_untracked_account_id"
     t.index ["import_id", "source_row_number"], name: "index_import_rows_on_import_id_and_source_row_number", unique: true
+    t.check_constraint "counterparty_class IS NULL OR (counterparty_class::text = ANY (ARRAY['internal_tracked'::character varying, 'internal_untracked'::character varying, 'external'::character varying, 'unknown'::character varying]::text[]))", name: "import_rows_counterparty_class_known"
+    t.check_constraint "counterparty_untracked_account_id IS NULL OR counterparty_class::text = 'internal_untracked'::text", name: "import_rows_untracked_account_class"
     t.check_constraint "source_row_number > 0", name: "chk_import_rows_source_row_number_positive"
   end
 
@@ -1986,6 +2022,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
     t.jsonb "locked_attributes", default: {}
     t.string "subtype"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "own_untracked_accounts", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "family_id", null: false
+    t.string "name", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index "family_id, lower((name)::text)", name: "index_own_untracked_accounts_on_family_and_name", unique: true
+    t.index ["family_id"], name: "index_own_untracked_accounts_on_family_id"
   end
 
   create_table "plaid_accounts", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -2952,6 +2997,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
     t.string "provider_entry_reference"
     t.uuid "transfer_id"
     t.datetime "updated_at", null: false
+    t.uuid "own_untracked_account_id"
     t.index "(((extra -> 'goal'::text) ->> 'pledge_id'::text))", name: "ix_transactions_extra_goal_pledge_id", unique: true, where: "(((extra -> 'goal'::text) ->> 'pledge_id'::text) IS NOT NULL)"
     t.index ["category_id"], name: "index_transactions_on_category_id"
     t.index ["external_id"], name: "index_transactions_on_external_id"
@@ -2959,6 +3005,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
     t.index ["investment_activity_label"], name: "index_transactions_on_investment_activity_label"
     t.index ["kind"], name: "index_transactions_on_kind"
     t.index ["merchant_id"], name: "index_transactions_on_merchant_id"
+    t.index ["own_untracked_account_id"], name: "index_transactions_on_own_untracked_account_id"
     t.index ["transfer_id"], name: "index_transactions_on_transfer_id"
   end
 
@@ -3205,6 +3252,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
     t.index ["status"], name: "index_wise_items_on_status"
   end
 
+  add_foreign_key "account_identifiers", "account_statements", on_delete: :cascade
+  add_foreign_key "account_identifiers", "accounts", on_delete: :cascade
+  add_foreign_key "account_identifiers", "families", on_delete: :cascade
+  add_foreign_key "account_identifiers", "imports", column: "learned_by_import_id", on_delete: :nullify
+  add_foreign_key "account_identifiers", "own_untracked_accounts", on_delete: :cascade
   add_foreign_key "account_providers", "accounts", on_delete: :cascade
   add_foreign_key "account_shares", "accounts"
   add_foreign_key "account_shares", "users"
@@ -3303,7 +3355,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
   add_foreign_key "impersonation_session_logs", "impersonation_sessions"
   add_foreign_key "impersonation_sessions", "users", column: "impersonated_id"
   add_foreign_key "impersonation_sessions", "users", column: "impersonator_id"
+  add_foreign_key "import_rows", "accounts", column: "counterparty_account_id", on_delete: :nullify
+  add_foreign_key "import_rows", "entries", column: "counterparty_entry_id", on_delete: :nullify
   add_foreign_key "import_rows", "imports"
+  add_foreign_key "import_rows", "own_untracked_accounts", column: "counterparty_untracked_account_id", on_delete: :nullify
   add_foreign_key "import_sessions", "families"
   add_foreign_key "import_source_mappings", "families"
   add_foreign_key "import_source_mappings", "import_sessions", column: ["import_session_id", "family_id"], primary_key: ["id", "family_id"], name: "fk_import_source_mappings_session_family", on_delete: :cascade
@@ -3340,6 +3395,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
   add_foreign_key "oidc_identities", "users"
   add_foreign_key "onchain_wallet_accounts", "onchain_wallet_items"
   add_foreign_key "onchain_wallet_items", "families"
+  add_foreign_key "own_untracked_accounts", "families", on_delete: :cascade
   add_foreign_key "plaid_accounts", "plaid_items"
   add_foreign_key "plaid_items", "families"
   add_foreign_key "plaid_items", "users", column: "owner_id", on_delete: :nullify
@@ -3404,6 +3460,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_22_100000) do
   add_foreign_key "trading212_items", "families"
   add_foreign_key "transactions", "categories", on_delete: :nullify
   add_foreign_key "transactions", "merchants"
+  add_foreign_key "transactions", "own_untracked_accounts", on_delete: :nullify
   add_foreign_key "transactions", "transfers"
   add_foreign_key "transfers", "transactions", column: "inflow_transaction_id", on_delete: :cascade
   add_foreign_key "transfers", "transactions", column: "outflow_transaction_id", on_delete: :cascade

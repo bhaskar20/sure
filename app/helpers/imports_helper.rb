@@ -39,8 +39,121 @@ module ImportsHelper
       category_color: I18n.t("imports.column_labels.category_color"),
       category_icon: I18n.t("imports.column_labels.category_icon"),
       merchant_color: I18n.t("imports.column_labels.merchant_color"),
-      merchant_website: I18n.t("imports.column_labels.merchant_website")
+      merchant_website: I18n.t("imports.column_labels.merchant_website"),
+      counterparty: I18n.t("imports.column_labels.counterparty")
     }[key]
+  end
+
+  # The review grid's columns: the import's own, plus the Counterparty column
+  # on statement imports for members who opted into preview features.
+  def review_column_keys(import)
+    counterparty_column?(import) ? import.column_keys + [ :counterparty ] : import.column_keys
+  end
+
+  def counterparty_column?(import)
+    import.is_a?(PdfImport) && import.account.present? && preview_features_enabled?
+  end
+
+  def counterparty_accounts(import)
+    @counterparty_accounts ||= {}
+    @counterparty_accounts[import.id] ||= import.counterparty_accounts_for(Current.user).to_a
+  end
+
+  # The choice as publishing will treat it: a line linked to an account the
+  # reviewer cannot link to is published plain, so it shows as undecided.
+  def counterparty_untracked_accounts(import)
+    @counterparty_untracked_accounts ||= {}
+    @counterparty_untracked_accounts[import.family_id] ||= import.family.own_untracked_accounts.alphabetically.to_a
+  end
+
+  # The choice as publishing will treat it: a line linked to an account the
+  # reviewer cannot link to is published plain, so it shows as undecided; one
+  # pointing at an untracked account removed since is just "not in Sure".
+  def counterparty_effective_choice(row)
+    choice = row.counterparty_choice
+    if choice&.start_with?("account:")
+      counterparty_accounts(row.import).any? { |account| "account:#{account.id}" == choice } ? choice : "unknown"
+    elsif choice&.start_with?("untracked:")
+      counterparty_untracked_accounts(row.import).any? { |untracked| "untracked:#{untracked.id}" == choice } ? choice : "internal_untracked"
+    else
+      choice
+    end
+  end
+
+  def counterparty_select_options(row)
+    accounts = counterparty_accounts(row.import)
+    untracked = counterparty_untracked_accounts(row.import)
+    suggested = row.counterparty_class == "unknown" && accounts.find { |account| account.id == row.counterparty_account_id }
+    unknown_label = suggested ? t("imports.counterparty.options.unknown_with_suggestion", account: suggested.name) : t("imports.counterparty.options.unknown")
+
+    grouped = {}
+    grouped[t("imports.counterparty.groups.own_accounts")] = accounts.map { |account| [ account.name, "account:#{account.id}" ] } if accounts.any?
+    grouped[t("imports.counterparty.groups.untracked_accounts")] = untracked.map { |account| [ account.name, "untracked:#{account.id}" ] } if untracked.any?
+    grouped[t("imports.counterparty.groups.other")] = [
+      [ t("imports.counterparty.options.internal_untracked"), "internal_untracked" ],
+      [ t("imports.counterparty.options.external"), "external" ],
+      [ unknown_label, "unknown" ]
+    ]
+    grouped[t("imports.counterparty.groups.other")] << [ t("imports.counterparty.options.add_untracked"), "new_untracked" ] unless Current.user&.guest?
+    prompt = row.counterparty_class.blank? ? t("imports.counterparty.options.unclassified") : nil
+    grouped_options_for_select(grouped, counterparty_effective_choice(row), prompt: prompt)
+  end
+
+  # What publishing will do with a line linked to one of the family's tracked
+  # accounts: link it to the entry already there, write the other side into
+  # that account until its own statement arrives, or leave it unlinked.
+  def counterparty_publish_plan(row)
+    choice = counterparty_effective_choice(row)
+    return unless choice&.start_with?("account:")
+
+    target = counterparty_accounts(row.import).find { |account| "account:#{account.id}" == choice }
+    return if target.nil?
+
+    date = Date.iso8601(row.date_iso)
+    # Publishing links to the reviewed entry, or else the nearest one that fits.
+    if Import::CounterpartyClassifier.mirror_scope(account_ids: [ target.id ], amounts: [ -row.signed_amount ], currencies: [ row.currency ], dates: [ date ]).exists?
+      return t("imports.counterparty.plan.link", account: target.name)
+    end
+
+    blocker = target.provisional_leg_blocker_for(date: date, amount: -row.signed_amount, currency: row.currency)
+    blocker ? t("imports.counterparty.plan.unlinked_#{blocker}", account: target.name) : t("imports.counterparty.plan.leg", account: target.name)
+  rescue ArgumentError, TypeError
+    nil
+  end
+
+  # Why the line was classified as it was, for the cell's tooltip. Evidence
+  # about an account the reviewer cannot see is left out.
+  def counterparty_reasons_text(row)
+    texts = [ counterparty_publish_plan(row) ]
+    if row.counterparty_class == "internal_tracked" && counterparty_effective_choice(row) == "unknown" && row.counterparty_account_id.present?
+      texts << t("imports.counterparty.reasons.not_linkable")
+    end
+    return (texts << t("imports.counterparty.reasons.user_set")).compact.join(" · ") if row.counterparty_user_set
+
+    visible = Current.user.accessible_accounts.where(family_id: row.import.family_id).pluck(:id, :name).to_h
+    visible.merge!(counterparty_untracked_accounts(row.import).to_h { |untracked| [ "untracked:#{untracked.id}", untracked.name ] })
+
+    Array(row.counterparty_reasons).each do |reason|
+      owner = reason["untracked_account_id"].present? ? "untracked:#{reason["untracked_account_id"]}" : reason["account_id"]
+      next if owner.present? && !visible.key?(owner)
+
+      account_name = visible[owner]
+      texts << case reason["code"]
+      when "identifier" then t("imports.counterparty.reasons.identifier", value: reason["value"], account: account_name)
+      when "mirror_entry" then t("imports.counterparty.reasons.mirror_entry", date: l(Date.iso8601(reason["date"]), format: :short), account: account_name)
+      when "account_name" then t("imports.counterparty.reasons.account_name", value: reason["value"], account: account_name)
+      when "holder_name" then t("imports.counterparty.reasons.holder_name", account: account_name)
+      when "card_payment" then t("imports.counterparty.reasons.card_payment")
+      when "card_payment_to_card" then t("imports.counterparty.reasons.card_payment_to_card", account: account_name)
+      when "card_payment_received" then t("imports.counterparty.reasons.card_payment_received")
+      when "only_card" then t("imports.counterparty.reasons.only_card", account: account_name)
+      when "self_marker" then t("imports.counterparty.reasons.self_marker")
+      when "own_name" then t("imports.counterparty.reasons.own_name", name: reason["value"])
+      when "wallet_topup" then t("imports.counterparty.reasons.wallet_topup", wallet: reason["value"])
+      when "conflict" then t("imports.counterparty.reasons.conflict")
+      end
+    end
+    texts.compact.uniq.join(" · ").presence
   end
 
   def dry_run_resource(key)

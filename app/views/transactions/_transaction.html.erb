@@ -171,6 +171,8 @@
                         <% else %>
                           <%= entry.account.name %>
                         <% end %>
+                      <% elsif transaction.own_untracked_account.present? %>
+                        <%= entry.account.name %> <%= entry.amount.negative? ? "←" : "→" %> <%= t("transactions.transaction.untracked_account", name: transaction.own_untracked_account.name) %>
                       <% else %>
                         <%= entry.account.name %>
                       <% end %>

@@ -335,6 +335,7 @@ class Import < ApplicationRecord
 
   def revert
     Import.transaction do
+      release_linked_records!
       accounts.destroy_all
       entries.destroy_all
       revert_derived_state!
@@ -612,6 +613,11 @@ class Import < ApplicationRecord
     # not create, and destroying its own entries does not unwind that. Runs
     # inside revert's transaction, so a failure here rolls the whole revert back.
     def revert_derived_state!
+    end
+
+    # Hook for import types whose entries are linked to records the import
+    # does not own, run before revert destroys the entries.
+    def release_linked_records!
     end
 
     # Where the record lands once its data is gone. Most imports return to

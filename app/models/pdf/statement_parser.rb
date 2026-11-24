@@ -32,6 +32,11 @@ class Pdf::StatementParser
   CURRENCY_HEADER = /\Acurrency\s*:/i
   NOT_DESCRIPTION = /\Apage\s+\d|\d+\s+of\s+\d+\z|\Avalue\s+date|\APDS_|carried\s+forward|brought\s+forward|\Atotal|sub-?total|currency\s*:|new\s+transactions|card\s+no/i
 
+  # Lines that name a row's counterparty or reference, which banks print as
+  # detail lines under the row, sometimes after a blank line: a labelled line,
+  # or a bare dashed account number ("094-27742-6:IB").
+  DETAIL_LINE = /\A(?:(?:from|to|by|beneficiary|payee)\s*:|(?:ref|incoming|outgoing|paynow|fund\s+transfer|top-?up)\b|other\z|\d{3}-\d{4,7}-\d{1,3}(?::[A-Z]{1,4})?\z)/i
+
   Result = Data.define(:transactions, :opening_balance, :closing_balance, :period)
 
   # A statement covers about a month; rows without a year must fall within
@@ -46,7 +51,11 @@ class Pdf::StatementParser
   end
 
   def initialize(pages, liability: false)
-    @lines = Array(pages).flat_map { |page| page.to_s.split("\n") }
+    page_lines = Array(pages).map { |page| page.to_s.split("\n") }
+    @lines = page_lines.flatten
+    # Index of each page's first line after the first page: a row never
+    # continues across a page break.
+    @page_starts = page_lines.each_with_object([ 0 ]) { |page, starts| starts << starts.last + page.size }[1...-1].to_set
     @liability = liability
   end
 
@@ -106,10 +115,40 @@ class Pdf::StatementParser
       section_has_rows = false
       closing_frozen = false
 
-      lines.each do |raw|
+      blank_run = 0
+      # Set after a blank line or a stray margin character inside a row: only a
+      # labelled detail line may still continue it, so a page footer or the
+      # next page's header is never folded into the last row.
+      gap = false
+
+      lines.each_with_index do |raw, index|
+        # A row can continue at the top of the next page, but only with a
+        # detail line, so the next page's header never joins it.
+        if @page_starts.include?(index)
+          gap = true
+          blank_run = 0
+        end
+
         line = strip_margin(raw)
         text = line.strip
-        next current = nil if text.empty?
+        if text.empty?
+          blank_run += 1
+          gap = true
+          current = nil if blank_run > 1
+          next
+        end
+        # DBS-style rotated margin text: one or two characters on a line of
+        # their own, between a row's detail lines.
+        if current && text.length <= 2 && text.match?(/\A[[:alnum:][:punct:]]+\z/)
+          gap = true
+          next
+        end
+
+        blank_run = 0
+        if gap && current && !text.match?(DETAIL_LINE)
+          current = nil
+        end
+        gap = false
 
         if text.match?(CURRENCY_HEADER)
           # Balances of a later currency section must not replace this one's.
@@ -162,7 +201,7 @@ class Pdf::StatementParser
           next
         end
 
-        if current && date.nil? && amounts.empty? && continuation < 3 && text.length.between?(3, 100) && !text.match?(NOT_DESCRIPTION)
+        if current && date.nil? && amounts.empty? && (continuation < 3 || (continuation < 4 && text.match?(DETAIL_LINE))) && text.length.between?(3, 100) && !text.match?(NOT_DESCRIPTION)
           current[:notes] << text.squeeze(" ")
           continuation += 1
         else

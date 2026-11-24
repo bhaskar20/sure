@@ -20,6 +20,7 @@ en:
       local_ai_label: Local AI
       logout: Logout
       merchants_label: Merchants
+      own_untracked_accounts_label: Accounts not in Sure
       providers_label: Providers
       guides_label: Guides
       other_section_title: More

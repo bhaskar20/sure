@@ -4,6 +4,8 @@ class Transaction < ApplicationRecord
   belongs_to :category, optional: true
   belongs_to :merchant, optional: true
   belongs_to :transfer, optional: true
+  # The family's own account outside Sure that this transfer went to or came from.
+  belongs_to :own_untracked_account, optional: true
 
   has_many :taggings, as: :taggable, dependent: :destroy
   has_many :tags, through: :taggings

@@ -48,6 +48,24 @@
           </p>
         </div>
 
+        <% counterparty = counterparty_column?(import) ? import.counterparty_summary(Current.user) : nil %>
+        <% if counterparty && counterparty[:classified].positive? %>
+          <div class="space-y-2">
+            <h2 class="font-medium text-primary flex items-center gap-2">
+              <%= t("imports.pdf_import.counterparty_title") %>
+              <%= render DS::Pill.new(label: t("shared.preview")) %>
+            </h2>
+            <p class="text-sm text-secondary px-3 py-2 bg-container-inset rounded-lg">
+              <%= t("imports.pdf_import.counterparty_internal", count: counterparty[:internal], total: counterparty[:total]) %>
+              <% if counterparty[:needs_decision].positive? %>
+                <span class="block mt-1 text-xs text-subdued">
+                  <%= t("imports.pdf_import.counterparty_needs_decision", count: counterparty[:needs_decision]) %>
+                </span>
+              <% end %>
+            </p>
+          </div>
+        <% end %>
+
         <div class="space-y-2">
           <h2 id="pdf-import-select-account" class="font-medium text-primary"><%= t("imports.pdf_import.select_account") %></h2>
           <%# Provider-backed accounts are offered too: rows are matched against
